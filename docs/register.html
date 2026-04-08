@@ -83,7 +83,7 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Registration failed');
                 saveAuth(data.token, { username: data.username });
-                window.location.href = '/index.html';
+                window.location.href = toPath('index.html');
             } catch(err) {
                 errorEl.textContent   = err.message;
                 errorEl.style.display = 'block';

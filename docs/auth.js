@@ -11,6 +11,20 @@ function getUser()             { try { return JSON.parse(localStorage.getItem(AU
 function saveAuth(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); }
 function clearAuth()           { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); }
 
+// ── Base path — works for both localhost and GitHub Pages subdirectories ──
+// e.g. localhost → '', GitHub Pages → '/Productivity-Tracker-Capstone'
+const BASE = (() => {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    // On GitHub Pages the repo name is the first path segment
+    // On localhost there's no meaningful prefix
+    if (window.location.hostname.endsWith('github.io') && parts.length > 0) {
+        return '/' + parts[0];
+    }
+    return '';
+})();
+
+function toPath(page) { return BASE + '/' + page; }
+
 // ── Backend detection ──
 let _backendAvailable = null;
 
@@ -21,8 +35,9 @@ async function isBackendAvailable() {
             headers: { 'Authorization': `Bearer ${getToken() || ''}` },
             signal: AbortSignal.timeout(1500)
         });
-        // 401 means backend is up (just not authed), anything network-level = down
-        _backendAvailable = true;
+        // Backend is up only if it returns 200 or 401.
+        // GitHub Pages returns 404 for /api/* — that means no backend.
+        _backendAvailable = res.status === 200 || res.status === 401;
     } catch(e) {
         _backendAvailable = false;
     }
@@ -49,7 +64,7 @@ async function requireAuth() {
     if (!backendUp) return false; // offline/static mode — skip auth
 
     const token = getToken();
-    if (!token) { window.location.href = '/login.html'; return false; }
+    if (!token) { window.location.href = toPath('login.html'); return false; }
 
     // Verify token is still valid
     const res = await fetch('/api/me', {
@@ -57,7 +72,7 @@ async function requireAuth() {
     });
     if (!res.ok) {
         clearAuth();
-        window.location.href = '/login.html';
+        window.location.href = toPath('login.html');
         return false;
     }
 
@@ -74,7 +89,7 @@ async function requireAuth() {
 // ── Logout ──
 function logout() {
     clearAuth();
-    window.location.href = '/login.html';
+    window.location.href = toPath('login.html');
 }
 
 // ── Wire up logout button if present ──
