@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — Productivity Tracker</title>
+    <script>try{var t=localStorage.getItem('pt_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="auth-body">
+
+    <header>
+        <a class="logo" href="login.html">&#9675; Productivity Tracker</a>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1 class="auth-title">Welcome back</h1>
+            <p class="auth-subtitle">Sign in to access your tasks from any device</p>
+
+            <div class="auth-error" id="auth-error" style="display:none;"></div>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required />
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required />
+                </div>
+                <button type="submit" class="btn auth-btn" id="login-btn">Sign in</button>
+            </form>
+
+            <p class="auth-switch">
+                Don't have an account? <a href="register.html">Create one</a>
+            </p>
+        </div>
+    </main>
+
+    <footer>
+        CMPA4404 &mdash; Productivity Tracker Capstone
+    </footer>
+
+    <script src="auth.js"></script>
+    <script>
+        // Dark mode toggle
+        const root = document.documentElement;
+        const btn  = document.getElementById('theme-toggle');
+        function syncIcon() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
+        syncIcon();
+        btn.addEventListener('click', () => {
+            const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            root.setAttribute('data-theme', next);
+            try { localStorage.setItem('pt_theme', next); } catch(e) {}
+            syncIcon();
+        });
+
+        // If already logged in, go to dashboard
+        (async () => {
+            const token = getToken();
+            if (token) {
+                const res = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) { window.location.href = '/index.html'; return; }
+                clearAuth();
+            }
+        })();
+
+        // Login form
+        document.getElementById('login-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const loginBtn = document.getElementById('login-btn');
+            const errorEl  = document.getElementById('auth-error');
+            errorEl.style.display = 'none';
+            loginBtn.textContent  = 'Signing in…';
+            loginBtn.disabled     = true;
+
+            try {
+                const res  = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email:    document.getElementById('email').value.trim(),
+                        password: document.getElementById('password').value
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Login failed');
+                saveAuth(data.token, { username: data.username });
+                window.location.href = '/index.html';
+            } catch(err) {
+                errorEl.textContent   = err.message;
+                errorEl.style.display = 'block';
+                loginBtn.textContent  = 'Sign in';
+                loginBtn.disabled     = false;
+            }
+        });
+    </script>
+</body>
+</html>

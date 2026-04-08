@@ -22,16 +22,11 @@ const today = new Date().toISOString().slice(0, 10);
 document.getElementById('due-date-input').value = today;
 
 // ── Backend detection ──
-// Tries the real API first; falls back to localStorage if unavailable (e.g. GitHub Pages)
+// auth.js exposes isBackendAvailable() — we alias it here for clarity
 let useBackend = false;
 
 async function detectBackend() {
-    try {
-        const res = await fetch('/api/stats', { signal: AbortSignal.timeout(1500) });
-        useBackend = res.ok;
-    } catch(e) {
-        useBackend = false;
-    }
+    useBackend = await isBackendAvailable();
 }
 
 // ── localStorage store (fallback) ──
@@ -47,14 +42,14 @@ function lsSaveHabits(h) { localStorage.setItem(LS_HABITS, JSON.stringify(h)); }
 const Store = {
     async getTasks() {
         if (useBackend) {
-            const r = await fetch('/api/tasks'); return r.json();
+            const r = await authFetch('/api/tasks'); return r.json();
         }
         return lsGetTasks();
     },
 
     async addTask(text, category, due_date) {
         if (useBackend) {
-            const r = await fetch('/api/tasks', {
+            const r = await authFetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, category, due_date })
@@ -69,7 +64,7 @@ const Store = {
 
     async toggleTask(id, done) {
         if (useBackend) {
-            await fetch(`/api/tasks/${id}`, {
+            await authFetch(`/api/tasks/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ done })
@@ -83,14 +78,14 @@ const Store = {
 
     async deleteTask(id) {
         if (useBackend) {
-            await fetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
+            await authFetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
     },
 
     async getStats() {
         if (useBackend) {
-            const r = await fetch('/api/stats'); return r.json();
+            const r = await authFetch('/api/stats'); return r.json();
         }
         const tasks  = lsGetTasks();
         const todayT = tasks.filter(t => t.due_date === today);
@@ -115,7 +110,7 @@ const Store = {
 
     async getHabits() {
         if (useBackend) {
-            const r = await fetch('/api/habits'); return r.json();
+            const r = await authFetch('/api/habits'); return r.json();
         }
         return lsGetHabits().map(h => {
             const completions = h.completions || [];
@@ -136,7 +131,7 @@ const Store = {
 
     async addHabit(name, category) {
         if (useBackend) {
-            const r = await fetch('/api/habits', {
+            const r = await authFetch('/api/habits', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, category })
@@ -151,7 +146,7 @@ const Store = {
 
     async toggleHabit(id) {
         if (useBackend) {
-            const r = await fetch(`/api/habits/${id}/toggle`, { method: 'POST' }); return r.json();
+            const r = await authFetch(`/api/habits/${id}/toggle`, { method: 'POST' }); return r.json();
         }
         const habits = lsGetHabits();
         const h = habits.find(x => x.id === id);
@@ -165,7 +160,7 @@ const Store = {
 
     async deleteHabit(id) {
         if (useBackend) {
-            await fetch(`/api/habits/${id}`, { method: 'DELETE' }); return;
+            await authFetch(`/api/habits/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveHabits(lsGetHabits().filter(x => x.id !== id));
     }
@@ -381,6 +376,12 @@ async function loadAll() {
 
 (async () => {
     await detectBackend();
+    if (useBackend) {
+        await requireAuth(); // redirects to login if not authenticated
+        // Show logout button once authenticated
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+    }
     await loadAll();
     await loadHabits();
 })();

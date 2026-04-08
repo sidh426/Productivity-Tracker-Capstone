@@ -17,12 +17,7 @@ themeToggle.addEventListener('click', () => {
 let useBackend = false;
 
 async function detectBackend() {
-    try {
-        const res = await fetch('/api/stats', { signal: AbortSignal.timeout(1500) });
-        useBackend = res.ok;
-    } catch(e) {
-        useBackend = false;
-    }
+    useBackend = await isBackendAvailable();
 }
 
 // ── localStorage helpers ──
@@ -34,14 +29,14 @@ function lsSaveTasks(t) { localStorage.setItem(LS_TASKS, JSON.stringify(t)); }
 const Store = {
     async getTasksByDate(dateStr) {
         if (useBackend) {
-            const r = await fetch(`/api/tasks?date=${dateStr}`); return r.json();
+            const r = await authFetch(`/api/tasks?date=${dateStr}`); return r.json();
         }
         return lsGetTasks().filter(t => t.due_date === dateStr);
     },
 
     async getCalendarData(year, month) {
         if (useBackend) {
-            const r = await fetch(`/api/tasks/calendar?year=${year}&month=${month}`); return r.json();
+            const r = await authFetch(`/api/tasks/calendar?year=${year}&month=${month}`); return r.json();
         }
         const prefix = `${year}-${String(month).padStart(2, '0')}`;
         const tasks  = lsGetTasks().filter(t => t.due_date && t.due_date.startsWith(prefix));
@@ -56,7 +51,7 @@ const Store = {
 
     async addTask(text, category, due_date) {
         if (useBackend) {
-            const r = await fetch('/api/tasks', {
+            const r = await authFetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, category, due_date })
@@ -71,7 +66,7 @@ const Store = {
 
     async toggleTask(id, done) {
         if (useBackend) {
-            await fetch(`/api/tasks/${id}`, {
+            await authFetch(`/api/tasks/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ done })
@@ -85,7 +80,7 @@ const Store = {
 
     async deleteTask(id) {
         if (useBackend) {
-            await fetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
+            await authFetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
     }
@@ -290,6 +285,11 @@ document.getElementById('cal-today').addEventListener('click', async () => {
 // ── Init ──
 (async () => {
     await detectBackend();
+    if (useBackend) {
+        await requireAuth(); // redirects to login if not authenticated
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+    }
     await loadCalendarData();
     renderCalendar();
     await selectDay(now.toISOString().slice(0, 10));

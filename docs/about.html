@@ -17,6 +17,8 @@
                 <a href="calendar.html">Calendar</a>
                 <a href="about.html" class="active">About</a>
             </nav>
+            <span class="nav-username" id="nav-username"></span>
+            <button class="btn btn-ghost btn-sm" id="logout-btn" style="display:none;">Sign out</button>
             <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
         </div>
     </header>
@@ -83,8 +85,9 @@
         CMPA4404 &mdash; Productivity Tracker Capstone
     </footer>
 
+    <script src="auth.js"></script>
     <script>
-        // Dark mode toggle (shared)
+        // Dark mode toggle
         const root = document.documentElement;
         const btn  = document.getElementById('theme-toggle');
         function syncIcon() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
@@ -95,6 +98,19 @@
             try { localStorage.setItem('pt_theme', next); } catch(e) {}
             syncIcon();
         });
+
+        // Show username + logout if logged in
+        (async () => {
+            const backendUp = await isBackendAvailable();
+            if (!backendUp) return;
+            const user = getUser();
+            if (user) {
+                const el = document.getElementById('nav-username');
+                if (el) el.textContent = user.username;
+                const logoutBtn = document.getElementById('logout-btn');
+                if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+            }
+        })();
     </script>
 </body>
 </html>
