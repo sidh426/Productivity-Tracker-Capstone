@@ -11,21 +11,9 @@ function getUser()             { try { return JSON.parse(localStorage.getItem(AU
 function saveAuth(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); }
 function clearAuth()           { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); }
 
-// ── Base path — works for both localhost and GitHub Pages subdirectories ──
-// e.g. localhost → '', GitHub Pages → '/Productivity-Tracker-Capstone'
-const BASE = (() => {
-    const parts = window.location.pathname.split('/').filter(Boolean);
-    // On GitHub Pages the repo name is the first path segment
-    // On localhost there's no meaningful prefix
-    if (window.location.hostname.endsWith('github.io') && parts.length > 0) {
-        return '/' + parts[0];
-    }
-    return '';
-})();
-
-function toPath(page) { return BASE + '/' + page; }
-
 // ── Backend detection ──
+// Resolves the /api prefix correctly whether running on localhost or a subdirectory.
+// Uses the origin so relative fetch always hits the right server.
 let _backendAvailable = null;
 
 async function isBackendAvailable() {
@@ -35,9 +23,9 @@ async function isBackendAvailable() {
             headers: { 'Authorization': `Bearer ${getToken() || ''}` },
             signal: AbortSignal.timeout(1500)
         });
-        // Backend is up only if it returns 200 or 401.
-        // GitHub Pages returns 404 for /api/* — that means no backend.
-        _backendAvailable = res.status === 200 || res.status === 401;
+        // 200 = logged in, 401 = backend up but no token — both mean backend exists.
+        // 404 = GitHub Pages (no backend). Anything else network-level = no backend.
+        _backendAvailable = (res.status === 200 || res.status === 401);
     } catch(e) {
         _backendAvailable = false;
     }
@@ -57,22 +45,19 @@ async function authFetch(url, options = {}) {
 }
 
 // ── Guard — call on protected pages ──
-// If backend is up and user isn't logged in, redirect to login.
-// If backend is down, allow localStorage mode (no redirect).
+// Uses RELATIVE paths so it works on localhost, GitHub Pages, and any subdirectory.
 async function requireAuth() {
     const backendUp = await isBackendAvailable();
-    if (!backendUp) return false; // offline/static mode — skip auth
+    if (!backendUp) return false; // static/offline mode — skip auth entirely
 
     const token = getToken();
-    if (!token) { window.location.href = toPath('login.html'); return false; }
+    if (!token) { window.location.href = 'login.html'; return false; }
 
-    // Verify token is still valid
-    const res = await fetch('/api/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
+    // Verify token is still valid with the server
+    const res = await authFetch('/api/me');
     if (!res.ok) {
         clearAuth();
-        window.location.href = toPath('login.html');
+        window.location.href = 'login.html';
         return false;
     }
 
@@ -89,7 +74,7 @@ async function requireAuth() {
 // ── Logout ──
 function logout() {
     clearAuth();
-    window.location.href = toPath('login.html');
+    window.location.href = 'login.html';
 }
 
 // ── Wire up logout button if present ──

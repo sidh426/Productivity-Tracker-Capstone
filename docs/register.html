@@ -10,12 +10,13 @@
 <body class="auth-body">
 
     <header>
-        <a class="logo" href="login.html">&#9675; Productivity Tracker</a>
+        <a class="logo" href="index.html">&#9675; Productivity Tracker</a>
         <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
     </header>
 
     <main class="auth-main">
-        <div class="auth-card">
+        <!-- Shown when backend is available -->
+        <div class="auth-card" id="register-card">
             <h1 class="auth-title">Create your account</h1>
             <p class="auth-subtitle">Your tasks and habits will sync across all your devices</p>
 
@@ -40,6 +41,25 @@
             <p class="auth-switch">
                 Already have an account? <a href="login.html">Sign in</a>
             </p>
+            <p class="auth-switch" style="margin-top:0.5rem;">
+                <a href="index.html" style="color:var(--muted);font-weight:400;">Continue without account →</a>
+            </p>
+        </div>
+
+        <!-- Shown when no backend (GitHub Pages / static mode) -->
+        <div class="auth-card" id="static-card" style="display:none;">
+            <h1 class="auth-title">&#9675; Productivity Tracker</h1>
+            <p class="auth-subtitle">You're viewing the static version of this site</p>
+            <p style="font-size:0.9rem;color:var(--muted);line-height:1.7;margin-bottom:1.5rem;">
+                Account creation requires the backend server to be running.
+                In static mode, your tasks and habits are saved locally in this browser.
+            </p>
+            <a href="index.html" class="btn auth-btn" style="display:block;text-align:center;text-decoration:none;">
+                Go to Dashboard →
+            </a>
+            <p class="auth-switch" style="margin-top:1rem;">
+                Want full cross-device sync? Run <code style="background:var(--bg);padding:0.15rem 0.4rem;border-radius:4px;font-size:0.8rem;">node server.js</code> locally.
+            </p>
         </div>
     </main>
 
@@ -51,17 +71,38 @@
     <script>
         // Dark mode toggle
         const root = document.documentElement;
-        const btn  = document.getElementById('theme-toggle');
-        function syncIcon() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
+        const toggleBtn = document.getElementById('theme-toggle');
+        function syncIcon() { toggleBtn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
         syncIcon();
-        btn.addEventListener('click', () => {
+        toggleBtn.addEventListener('click', () => {
             const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             root.setAttribute('data-theme', next);
             try { localStorage.setItem('pt_theme', next); } catch(e) {}
             syncIcon();
         });
 
-        // Register form
+        (async () => {
+            const backendUp = await isBackendAvailable();
+
+            if (!backendUp) {
+                // Static mode — show the no-backend card
+                document.getElementById('register-card').style.display = 'none';
+                document.getElementById('static-card').style.display   = 'block';
+                return;
+            }
+
+            // Backend is up — check if already logged in
+            const token = getToken();
+            if (token) {
+                const res = await authFetch('/api/me');
+                if (res.ok) { window.location.href = 'index.html'; return; }
+                clearAuth();
+            }
+
+            document.getElementById('register-card').style.display = 'block';
+        })();
+
+        // Register form submit
         document.getElementById('register-form').addEventListener('submit', async e => {
             e.preventDefault();
             const regBtn  = document.getElementById('register-btn');
@@ -83,7 +124,7 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Registration failed');
                 saveAuth(data.token, { username: data.username });
-                window.location.href = toPath('index.html');
+                window.location.href = 'index.html';
             } catch(err) {
                 errorEl.textContent   = err.message;
                 errorEl.style.display = 'block';
