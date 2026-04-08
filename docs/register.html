@@ -42,7 +42,7 @@
                 Already have an account? <a href="login.html">Sign in</a>
             </p>
             <p class="auth-switch" style="margin-top:0.5rem;">
-                <a href="index.html" style="color:var(--muted);font-weight:400;">Continue without account →</a>
+                <a href="#" id="guest-link" style="color:var(--muted);font-weight:400;">Continue without account →</a>
             </p>
         </div>
 
@@ -101,6 +101,13 @@
 
             document.getElementById('register-card').style.display = 'block';
         })();
+
+        // Guest mode
+        document.getElementById('guest-link').addEventListener('click', e => {
+            e.preventDefault();
+            setGuestMode();
+            window.location.href = 'index.html';
+        });
 
         // Register form submit
         document.getElementById('register-form').addEventListener('submit', async e => {

@@ -38,7 +38,7 @@
                 Don't have an account? <a href="register.html">Create one</a>
             </p>
             <p class="auth-switch" style="margin-top:0.5rem;">
-                <a href="index.html" style="color:var(--muted);font-weight:400;">Continue without account →</a>
+                <a href="#" id="guest-link" style="color:var(--muted);font-weight:400;">Continue without account →</a>
             </p>
         </div>
 
@@ -98,6 +98,13 @@
             // Show login form
             document.getElementById('login-card').style.display = 'block';
         })();
+
+        // Guest mode — set flag then navigate to dashboard
+        document.getElementById('guest-link').addEventListener('click', e => {
+            e.preventDefault();
+            setGuestMode();
+            window.location.href = 'index.html';
+        });
 
         // Login form submit
         document.getElementById('login-form').addEventListener('submit', async e => {

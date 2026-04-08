@@ -286,8 +286,8 @@ document.getElementById('cal-today').addEventListener('click', async () => {
 (async () => {
     await detectBackend();
     if (useBackend) {
-        const authed = await requireAuth(); // reveals body, shows username/logout, redirects if needed
-        if (!authed) return;
+        const authed = await requireAuth();
+        if (!authed && !isGuestMode()) return;
     } else {
         const loginLink = document.getElementById('login-link');
         if (loginLink) loginLink.style.display = 'inline-flex';

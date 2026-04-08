@@ -377,11 +377,10 @@ async function loadAll() {
 (async () => {
     await detectBackend();
     if (useBackend) {
-        // requireAuth() handles: redirect if no token, reveal body, show username + logout btn
         const authed = await requireAuth();
-        if (!authed) return; // was redirected to login — stop here
+        // If not authed and not in guest mode, a redirect to login is in progress — stop here
+        if (!authed && !isGuestMode()) return;
     } else {
-        // Static / localStorage mode — show a Sign in button in the nav
         const loginLink = document.getElementById('login-link');
         if (loginLink) loginLink.style.display = 'inline-flex';
         document.body.style.opacity = '1';

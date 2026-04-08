@@ -4,6 +4,7 @@
 
 const AUTH_TOKEN_KEY = 'pt_auth_token';
 const AUTH_USER_KEY  = 'pt_auth_user';
+const GUEST_KEY      = 'pt_guest_mode';
 
 // ── API base URL ──
 // On Render (same origin) API calls use a relative path: /api/...
@@ -15,8 +16,11 @@ const API_BASE = window.location.hostname === 'sidh426.github.io'
 // ── Token helpers ──
 function getToken()            { return localStorage.getItem(AUTH_TOKEN_KEY); }
 function getUser()             { try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch(e) { return null; } }
-function saveAuth(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); }
+function saveAuth(token, user) { localStorage.setItem(AUTH_TOKEN_KEY, token); localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user)); localStorage.removeItem(GUEST_KEY); }
 function clearAuth()           { localStorage.removeItem(AUTH_TOKEN_KEY); localStorage.removeItem(AUTH_USER_KEY); }
+function isGuestMode()         { return localStorage.getItem(GUEST_KEY) === '1'; }
+function setGuestMode()        { localStorage.setItem(GUEST_KEY, '1'); }
+function clearGuestMode()      { localStorage.removeItem(GUEST_KEY); }
 
 // ── Backend detection ──
 // Returns true if the Render backend is reachable (200 or 401).
@@ -50,12 +54,17 @@ async function authFetch(path, options = {}) {
 }
 
 // ── Guard — call at the top of every protected page ──
-// If backend is up and no valid token → redirect to login.
-// If backend is unreachable → localStorage mode, no redirect.
+// Returns true if logged in with a valid token.
+// Returns false (no redirect) if backend is down OR user chose guest mode.
+// Redirects to login only if backend is up and user has not chosen guest mode.
 async function requireAuth() {
     const backendUp = await isBackendAvailable();
-    if (!backendUp) {
-        document.body.style.opacity = '1'; // reveal page in static mode
+
+    // No backend or user explicitly chose guest mode → localStorage mode
+    if (!backendUp || isGuestMode()) {
+        const loginLink = document.getElementById('login-link');
+        if (loginLink) loginLink.style.display = 'inline-flex';
+        document.body.style.opacity = '1';
         return false;
     }
 
@@ -82,13 +91,14 @@ async function requireAuth() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) logoutBtn.style.display = 'inline-flex';
 
-    document.body.style.opacity = '1'; // reveal page
+    document.body.style.opacity = '1';
     return true;
 }
 
 // ── Logout ──
 function logout() {
     clearAuth();
+    clearGuestMode();
     window.location.href = 'login.html';
 }
 
