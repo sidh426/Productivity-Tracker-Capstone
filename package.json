@@ -1,0 +1,14 @@
+{
+  "name": "productivity-tracker-capstone",
+  "version": "1.0.0",
+  "description": "Full-stack habit & task tracker with calendar planning",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2"
+  }
+}

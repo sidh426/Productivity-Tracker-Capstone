@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productivity Tracker</title>
+    <script>try{var t=localStorage.getItem('pt_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header>
+        <a class="logo" href="index.html">&#9675; Productivity Tracker</a>
+        <div class="header-right">
+            <nav>
+                <a href="index.html" class="active">Dashboard</a>
+                <a href="calendar.html">Calendar</a>
+                <a href="about.html">About</a>
+            </nav>
+            <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>Today's Dashboard</h1>
+            <p id="date-display"></p>
+        </div>
+
+        <!-- Stats row -->
+        <div class="stats">
+            <div class="stat">
+                <div class="value" id="stat-total">0</div>
+                <div class="label">All Tasks</div>
+            </div>
+            <div class="stat done-today">
+                <div class="value" id="stat-today-done">0</div>
+                <div class="label">Done Today</div>
+            </div>
+            <div class="stat">
+                <div class="value" id="stat-left">0</div>
+                <div class="label">Remaining</div>
+            </div>
+            <div class="stat streak">
+                <div class="value" id="stat-streak">0</div>
+                <div class="label">Day Streak 🔥</div>
+            </div>
+        </div>
+
+        <!-- Today's progress -->
+        <div class="card" id="today-progress-card" style="display:none">
+            <h2>Today's Progress</h2>
+            <div class="progress-wrap">
+                <div class="progress-label">
+                    <span id="progress-label-text">0 of 0 tasks done</span>
+                    <span id="progress-pct">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add task -->
+        <div class="card">
+            <h2>Add a task</h2>
+            <form class="task-form" id="task-form">
+                <input
+                    type="text"
+                    id="task-input"
+                    placeholder="e.g. Review lecture notes..."
+                    autocomplete="off"
+                    maxlength="120"
+                />
+                <select id="cat-select">
+                    <option value="school">School</option>
+                    <option value="work">Work</option>
+                    <option value="personal">Personal</option>
+                    <option value="health">Health</option>
+                </select>
+                <input type="date" id="due-date-input" title="Due date (optional)">
+                <button type="submit" class="btn">+ Add</button>
+            </form>
+        </div>
+
+        <!-- Task list -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Tasks</h2>
+            </div>
+            <div class="filter-tabs">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="school">School</button>
+                <button class="filter-btn" data-filter="work">Work</button>
+                <button class="filter-btn" data-filter="personal">Personal</button>
+                <button class="filter-btn" data-filter="health">Health</button>
+            </div>
+            <ul class="task-list" id="task-list">
+                <li class="empty-state" id="empty-msg">No tasks yet — add one above!</li>
+            </ul>
+        </div>
+
+        <!-- Habits -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Daily Habits</h2>
+            </div>
+            <form class="task-form" id="habit-form" style="margin-bottom: 1rem;">
+                <input
+                    type="text"
+                    id="habit-input"
+                    placeholder="e.g. Morning workout..."
+                    autocomplete="off"
+                    maxlength="80"
+                />
+                <select id="habit-cat-select">
+                    <option value="health">Health</option>
+                    <option value="personal">Personal</option>
+                    <option value="school">School</option>
+                    <option value="work">Work</option>
+                </select>
+                <button type="submit" class="btn">+ Habit</button>
+            </form>
+            <ul class="habit-list" id="habit-list">
+                <li class="empty-state" id="habit-empty-msg">No habits yet — add one above!</li>
+            </ul>
+        </div>
+    </main>
+
+    <footer>
+        CMPA4404 &mdash; Productivity Tracker Capstone
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

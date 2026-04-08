@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendar — Productivity Tracker</title>
+    <script>try{var t=localStorage.getItem('pt_theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header>
+        <a class="logo" href="index.html">&#9675; Productivity Tracker</a>
+        <div class="header-right">
+            <nav>
+                <a href="index.html">Dashboard</a>
+                <a href="calendar.html" class="active">Calendar</a>
+                <a href="about.html">About</a>
+            </nav>
+            <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="hero">
+            <h1>Calendar</h1>
+            <p>Plan and review tasks by date</p>
+        </div>
+
+        <div class="calendar-layout">
+            <!-- Left: calendar grid -->
+            <div>
+                <div class="card">
+                    <div class="calendar-nav">
+                        <h2 id="cal-month-label">April 2026</h2>
+                        <div class="calendar-nav-btns">
+                            <button class="btn btn-ghost btn-sm" id="cal-prev">&#8249;</button>
+                            <button class="btn btn-ghost btn-sm" id="cal-today">Today</button>
+                            <button class="btn btn-ghost btn-sm" id="cal-next">&#8250;</button>
+                        </div>
+                    </div>
+
+                    <div class="calendar-grid" id="calendar-grid">
+                        <!-- Day headers -->
+                        <div class="cal-header">Sun</div>
+                        <div class="cal-header">Mon</div>
+                        <div class="cal-header">Tue</div>
+                        <div class="cal-header">Wed</div>
+                        <div class="cal-header">Thu</div>
+                        <div class="cal-header">Fri</div>
+                        <div class="cal-header">Sat</div>
+                        <!-- Day cells rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div style="display:flex; gap:1.5rem; padding: 0 0.25rem; font-size:0.78rem; color:var(--muted);">
+                    <span style="display:flex;align-items:center;gap:0.4rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;"></span>
+                        Has tasks
+                    </span>
+                    <span style="display:flex;align-items:center;gap:0.4rem;">
+                        <span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;"></span>
+                        All done
+                    </span>
+                </div>
+            </div>
+
+            <!-- Right: day panel -->
+            <div class="day-panel">
+                <h3 id="day-panel-title">Select a day</h3>
+
+                <!-- Add task for selected day -->
+                <form class="task-form" id="day-task-form" style="margin-bottom:1rem; display:none;">
+                    <input
+                        type="text"
+                        id="day-task-input"
+                        placeholder="Add a task..."
+                        autocomplete="off"
+                        maxlength="120"
+                        style="flex:1;"
+                    />
+                    <select id="day-cat-select">
+                        <option value="school">School</option>
+                        <option value="work">Work</option>
+                        <option value="personal">Personal</option>
+                        <option value="health">Health</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm" style="width:100%;margin-top:0.4rem;">+ Add</button>
+                </form>
+
+                <ul class="task-list" id="day-task-list">
+                    <li class="empty-state" id="day-empty-msg" style="display:none;">No tasks for this day.</li>
+                </ul>
+
+                <p id="day-placeholder" style="color:var(--muted);font-size:0.875rem;text-align:center;padding:1rem 0;">
+                    Click a day on the calendar to view or add tasks.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        CMPA4404 &mdash; Productivity Tracker Capstone
+    </footer>
+
+    <script src="calendar.js"></script>
+</body>
+</html>
