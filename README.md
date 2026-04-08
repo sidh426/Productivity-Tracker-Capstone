@@ -2,9 +2,9 @@
 
 A full-stack habit and task management web application built as the CMPA4404 capstone project. This is a complete rebuild and evolution of my original [Productivity Tracker](https://github.com/sidh426/productivity-tracker-ui) — a project I built from scratch in CMPA4403 and became genuinely passionate about. The original proved how much could be done with just HTML, CSS, and vanilla JavaScript. This capstone takes that same foundation and pushes it further with a real backend, user accounts, calendar planning, habit tracking, and cross-device persistence.
 
-**Live sites:**
-- 🌐 **GitHub Pages (static demo):** https://sidh426.github.io/Productivity-Tracker-Capstone/
-- 🚀 **Render (full backend + accounts):** https://productivity-tracker-capstone.onrender.com
+**Live site:** https://sidh426.github.io/Productivity-Tracker-Capstone/
+
+> The Render backend powers accounts and cross-device sync behind the scenes — it is an API only, not a site to visit directly.
 
 ---
 
@@ -117,13 +117,15 @@ Render's free tier uses an **ephemeral filesystem** — any files written to dis
    - **Start Command:** `node server.js`
 3. Render automatically deploys on every push to `main`
 
-### How it works with GitHub Pages
-- When a user visits the **GitHub Pages** site, `auth.js` detects whether the Render backend is reachable
-- If Render responds (status 200 or 401), all API calls are routed to `https://productivity-tracker-capstone.onrender.com`
-- CORS headers on the server explicitly allow requests from `https://sidh426.github.io`
+### How it works
+- Users visit the **GitHub Pages** site — all HTML, CSS, and JS is served from there
+- `auth.js` checks if the Render API is reachable on page load
+- If reachable, all login/register/task/habit calls go directly from the browser to `https://productivity-tracker-capstone.onrender.com/api/...`
+- CORS headers on the server allow requests from `https://sidh426.github.io`
 - If Render is unreachable (cold start, downtime), the site falls back to **localStorage mode** automatically
+- The Render URL itself is an API endpoint — visiting it directly in a browser is not the intended use
 
-> **Note:** Render's free tier spins down after 15 minutes of inactivity. The first request after a sleep period may take 30–60 seconds to respond while the server wakes up.
+> **Note:** Render's free tier spins down after 15 minutes of inactivity. The first request after a sleep may take 30–60 seconds while the server wakes up.
 
 ---
 
