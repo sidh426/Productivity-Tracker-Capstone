@@ -286,9 +286,12 @@ document.getElementById('cal-today').addEventListener('click', async () => {
 (async () => {
     await detectBackend();
     if (useBackend) {
-        await requireAuth(); // redirects to login if not authenticated
-        const logoutBtn = document.getElementById('logout-btn');
-        if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+        const authed = await requireAuth(); // reveals body, shows username/logout, redirects if needed
+        if (!authed) return;
+    } else {
+        const loginLink = document.getElementById('login-link');
+        if (loginLink) loginLink.style.display = 'inline-flex';
+        document.body.style.opacity = '1';
     }
     await loadCalendarData();
     renderCalendar();

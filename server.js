@@ -48,6 +48,24 @@ db.exec(`
   );
 `);
 
+// ── CORS — allow GitHub Pages and localhost to call this API ──
+const ALLOWED_ORIGINS = [
+  'https://sidh426.github.io',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // ── Middleware ──
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'docs')));
@@ -264,9 +282,9 @@ app.get('/api/stats', requireAuth, (req, res) => {
   res.json({ today_total: todayTasks.n, today_done: todayDone.n, total: totalTasks.n, done: doneTasks.n, streak });
 });
 
-// ── Fallback — send login page for unknown routes ──
+// ── Fallback — unknown routes serve login page ──
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'docs', 'index.html'));
+  res.sendFile(path.join(__dirname, 'docs', 'login.html'));
 });
 
 app.listen(PORT, () => console.log(`Productivity Tracker running at http://localhost:${PORT}`));
