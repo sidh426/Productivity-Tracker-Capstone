@@ -1,5 +1,5 @@
 const express = require('express');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const bcrypt   = require('bcryptjs');
 const jwt      = require('jsonwebtoken');
 const path     = require('path');
@@ -8,47 +8,57 @@ const app    = express();
 const PORT   = process.env.PORT || 3000;
 const SECRET = process.env.JWT_SECRET || 'pt-capstone-secret-key-change-in-production';
 
-// ── Database setup ──
-const db = new Database(path.join(__dirname, 'tracker.db'));
-db.pragma('foreign_keys = ON');
+// ── Database setup (Neon PostgreSQL) ──
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    username      TEXT    NOT NULL UNIQUE,
-    email         TEXT    NOT NULL UNIQUE,
-    password_hash TEXT    NOT NULL,
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-  );
+// Create tables on startup if they don't exist
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      username      TEXT NOT NULL UNIQUE,
+      email         TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
 
-  CREATE TABLE IF NOT EXISTS tasks (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    text         TEXT    NOT NULL,
-    category     TEXT    NOT NULL DEFAULT 'personal',
-    done         INTEGER NOT NULL DEFAULT 0,
-    due_date     TEXT,
-    created_at   TEXT    NOT NULL DEFAULT (date('now')),
-    completed_at TEXT
-  );
+    CREATE TABLE IF NOT EXISTS tasks (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      text         TEXT NOT NULL,
+      category     TEXT NOT NULL DEFAULT 'personal',
+      done         BOOLEAN NOT NULL DEFAULT FALSE,
+      due_date     DATE,
+      created_at   DATE NOT NULL DEFAULT CURRENT_DATE,
+      completed_at TIMESTAMPTZ
+    );
 
-  CREATE TABLE IF NOT EXISTS habits (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name       TEXT    NOT NULL,
-    category   TEXT    NOT NULL DEFAULT 'personal',
-    created_at TEXT    NOT NULL DEFAULT (date('now'))
-  );
+    CREATE TABLE IF NOT EXISTS habits (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      category   TEXT NOT NULL DEFAULT 'personal',
+      created_at DATE NOT NULL DEFAULT CURRENT_DATE
+    );
 
-  CREATE TABLE IF NOT EXISTS habit_completions (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    habit_id       INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
-    completed_date TEXT    NOT NULL,
-    UNIQUE(habit_id, completed_date)
-  );
-`);
+    CREATE TABLE IF NOT EXISTS habit_completions (
+      id             SERIAL PRIMARY KEY,
+      habit_id       INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+      completed_date DATE NOT NULL,
+      UNIQUE(habit_id, completed_date)
+    );
+  `);
+  console.log('Database ready');
+}
 
-// ── CORS — allow GitHub Pages and localhost to call this API ──
+initDB().catch(err => {
+  console.error('Database init failed:', err.message);
+});
+
+// ── CORS — allow GitHub Pages and localhost ──
 const ALLOWED_ORIGINS = [
   'https://sidh426.github.io',
   'http://localhost:3000',
@@ -94,16 +104,26 @@ app.post('/api/register', async (req, res) => {
   if (password.length < 6)
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-  const exists = db.prepare('SELECT id FROM users WHERE email=? OR username=?').get(email, username);
-  if (exists) return res.status(409).json({ error: 'Username or email already taken' });
+  try {
+    const exists = await pool.query(
+      'SELECT id FROM users WHERE email=$1 OR username=$2',
+      [email.trim().toLowerCase(), username.trim()]
+    );
+    if (exists.rows.length > 0)
+      return res.status(409).json({ error: 'Username or email already taken' });
 
-  const hash = await bcrypt.hash(password, 10);
-  const info = db.prepare(
-    'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)'
-  ).run(username.trim(), email.trim().toLowerCase(), hash);
-
-  const token = jwt.sign({ id: info.lastInsertRowid, username }, SECRET, { expiresIn: '30d' });
-  res.status(201).json({ token, username });
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username',
+      [username.trim(), email.trim().toLowerCase(), hash]
+    );
+    const user  = result.rows[0];
+    const token = jwt.sign({ id: user.id, username: user.username }, SECRET, { expiresIn: '30d' });
+    res.status(201).json({ token, username: user.username });
+  } catch(e) {
+    console.error('Register error:', e.message);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // POST /api/login
@@ -112,177 +132,270 @@ app.post('/api/login', async (req, res) => {
   if (!email || !password)
     return res.status(400).json({ error: 'email and password are required' });
 
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email.trim().toLowerCase());
-  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-
-  const match = await bcrypt.compare(password, user.password_hash);
-  if (!match) return res.status(401).json({ error: 'Invalid email or password' });
-
-  const token = jwt.sign({ id: user.id, username: user.username }, SECRET, { expiresIn: '30d' });
-  res.json({ token, username: user.username });
-});
-
-// GET /api/me — verify token and return user info
-app.get('/api/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, username, email, created_at FROM users WHERE id=?').get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
-});
-
-// ── Task Routes (all protected) ──
-
-app.get('/api/tasks', requireAuth, (req, res) => {
-  const { date } = req.query;
-  if (date) {
-    return res.json(
-      db.prepare('SELECT * FROM tasks WHERE user_id=? AND due_date=? ORDER BY created_at DESC')
-        .all(req.user.id, date)
+  try {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email=$1',
+      [email.trim().toLowerCase()]
     );
+    const user = result.rows[0];
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Invalid email or password' });
+
+    const token = jwt.sign({ id: user.id, username: user.username }, SECRET, { expiresIn: '30d' });
+    res.json({ token, username: user.username });
+  } catch(e) {
+    console.error('Login error:', e.message);
+    res.status(500).json({ error: 'Server error' });
   }
-  res.json(
-    db.prepare('SELECT * FROM tasks WHERE user_id=? ORDER BY due_date ASC, created_at DESC')
-      .all(req.user.id)
-  );
 });
 
-app.get('/api/tasks/calendar', requireAuth, (req, res) => {
-  const { year, month } = req.query;
-  if (!year || !month) return res.status(400).json({ error: 'year and month required' });
-  const prefix = `${year}-${String(month).padStart(2, '0')}`;
-  res.json(
-    db.prepare(`
-      SELECT due_date, COUNT(*) as total, SUM(done) as done
-      FROM tasks WHERE user_id=? AND due_date LIKE ?
-      GROUP BY due_date
-    `).all(req.user.id, `${prefix}%`)
-  );
+// GET /api/me
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, username, email, created_at FROM users WHERE id=$1',
+      [req.user.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.post('/api/tasks', requireAuth, (req, res) => {
-  const { text, category = 'personal', due_date } = req.body;
-  if (!text || !text.trim()) return res.status(400).json({ error: 'text required' });
-  const info = db.prepare(
-    'INSERT INTO tasks (user_id, text, category, due_date) VALUES (?, ?, ?, ?)'
-  ).run(req.user.id, text.trim(), category, due_date || null);
-  res.status(201).json(db.prepare('SELECT * FROM tasks WHERE id=?').get(info.lastInsertRowid));
+// ── Task Routes ──
+
+app.get('/api/tasks', requireAuth, async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (date) {
+      const r = await pool.query(
+        'SELECT * FROM tasks WHERE user_id=$1 AND due_date=$2 ORDER BY created_at DESC',
+        [req.user.id, date]
+      );
+      return res.json(r.rows);
+    }
+    const r = await pool.query(
+      'SELECT * FROM tasks WHERE user_id=$1 ORDER BY due_date ASC NULLS LAST, created_at DESC',
+      [req.user.id]
+    );
+    res.json(r.rows);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.patch('/api/tasks/:id', requireAuth, (req, res) => {
-  const task = db.prepare('SELECT * FROM tasks WHERE id=? AND user_id=?').get(req.params.id, req.user.id);
-  if (!task) return res.status(404).json({ error: 'not found' });
-
-  const { done, text, category, due_date } = req.body;
-  const newDone     = done     !== undefined ? (done ? 1 : 0) : task.done;
-  const newText     = text     !== undefined ? text.trim()    : task.text;
-  const newCategory = category !== undefined ? category       : task.category;
-  const newDueDate  = due_date !== undefined ? due_date       : task.due_date;
-  const completedAt = newDone && !task.done ? new Date().toISOString() : (newDone ? task.completed_at : null);
-
-  db.prepare(`
-    UPDATE tasks SET done=?, text=?, category=?, due_date=?, completed_at=? WHERE id=? AND user_id=?
-  `).run(newDone, newText, newCategory, newDueDate, completedAt, req.params.id, req.user.id);
-
-  res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id));
+app.get('/api/tasks/calendar', requireAuth, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    if (!year || !month) return res.status(400).json({ error: 'year and month required' });
+    const r = await pool.query(
+      `SELECT due_date::text, COUNT(*) as total, SUM(CASE WHEN done THEN 1 ELSE 0 END) as done
+       FROM tasks
+       WHERE user_id=$1
+         AND EXTRACT(YEAR FROM due_date)=$2
+         AND EXTRACT(MONTH FROM due_date)=$3
+       GROUP BY due_date`,
+      [req.user.id, year, month]
+    );
+    res.json(r.rows);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.delete('/api/tasks/:id', requireAuth, (req, res) => {
-  const info = db.prepare('DELETE FROM tasks WHERE id=? AND user_id=?').run(req.params.id, req.user.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'not found' });
-  res.json({ ok: true });
+app.post('/api/tasks', requireAuth, async (req, res) => {
+  try {
+    const { text, category = 'personal', due_date } = req.body;
+    if (!text || !text.trim()) return res.status(400).json({ error: 'text required' });
+    const r = await pool.query(
+      'INSERT INTO tasks (user_id, text, category, due_date) VALUES ($1, $2, $3, $4) RETURNING *',
+      [req.user.id, text.trim(), category, due_date || null]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-// ── Habit Routes (all protected) ──
+app.patch('/api/tasks/:id', requireAuth, async (req, res) => {
+  try {
+    const existing = await pool.query(
+      'SELECT * FROM tasks WHERE id=$1 AND user_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!existing.rows[0]) return res.status(404).json({ error: 'not found' });
+    const task = existing.rows[0];
 
-app.get('/api/habits', requireAuth, (req, res) => {
-  const today  = new Date().toISOString().slice(0, 10);
-  const habits = db.prepare('SELECT * FROM habits WHERE user_id=? ORDER BY created_at ASC').all(req.user.id);
+    const { done, text, category, due_date } = req.body;
+    const newDone     = done     !== undefined ? done             : task.done;
+    const newText     = text     !== undefined ? text.trim()      : task.text;
+    const newCategory = category !== undefined ? category         : task.category;
+    const newDueDate  = due_date !== undefined ? due_date         : task.due_date;
+    const completedAt = newDone && !task.done ? new Date().toISOString()
+                      : newDone ? task.completed_at : null;
 
-  const result = habits.map(h => {
-    const todayDone = !!db.prepare(
-      'SELECT 1 FROM habit_completions WHERE habit_id=? AND completed_date=?'
-    ).get(h.id, today);
+    const r = await pool.query(
+      `UPDATE tasks SET done=$1, text=$2, category=$3, due_date=$4, completed_at=$5
+       WHERE id=$6 AND user_id=$7 RETURNING *`,
+      [newDone, newText, newCategory, newDueDate, completedAt, req.params.id, req.user.id]
+    );
+    res.json(r.rows[0]);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
-    const completions = db.prepare(
-      'SELECT completed_date FROM habit_completions WHERE habit_id=? ORDER BY completed_date DESC'
-    ).all(h.id).map(r => r.completed_date);
+app.delete('/api/tasks/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'DELETE FROM tasks WHERE id=$1 AND user_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Habit Routes ──
+
+app.get('/api/habits', requireAuth, async (req, res) => {
+  try {
+    const today  = new Date().toISOString().slice(0, 10);
+    const habits = (await pool.query(
+      'SELECT * FROM habits WHERE user_id=$1 ORDER BY created_at ASC',
+      [req.user.id]
+    )).rows;
+
+    const result = await Promise.all(habits.map(async h => {
+      const todayDone = (await pool.query(
+        'SELECT 1 FROM habit_completions WHERE habit_id=$1 AND completed_date=$2',
+        [h.id, today]
+      )).rows.length > 0;
+
+      const completions = (await pool.query(
+        'SELECT completed_date::text FROM habit_completions WHERE habit_id=$1 ORDER BY completed_date DESC',
+        [h.id]
+      )).rows.map(r => r.completed_date);
+
+      let streak = 0, check = today;
+      for (const date of completions) {
+        if (date === check) {
+          streak++;
+          const d = new Date(check);
+          d.setDate(d.getDate() - 1);
+          check = d.toISOString().slice(0, 10);
+        } else break;
+      }
+      return { ...h, today_done: todayDone, streak };
+    }));
+
+    res.json(result);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/habits', requireAuth, async (req, res) => {
+  try {
+    const { name, category = 'personal' } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
+    const r = await pool.query(
+      'INSERT INTO habits (user_id, name, category) VALUES ($1, $2, $3) RETURNING *',
+      [req.user.id, name.trim(), category]
+    );
+    res.status(201).json(r.rows[0]);
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/habits/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      'DELETE FROM habits WHERE id=$1 AND user_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (r.rowCount === 0) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/habits/:id/toggle', requireAuth, async (req, res) => {
+  try {
+    const habit = await pool.query(
+      'SELECT id FROM habits WHERE id=$1 AND user_id=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!habit.rows[0]) return res.status(404).json({ error: 'not found' });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await pool.query(
+      'SELECT id FROM habit_completions WHERE habit_id=$1 AND completed_date=$2',
+      [req.params.id, today]
+    );
+
+    if (existing.rows.length > 0) {
+      await pool.query('DELETE FROM habit_completions WHERE id=$1', [existing.rows[0].id]);
+      return res.json({ done: false });
+    }
+    await pool.query(
+      'INSERT INTO habit_completions (habit_id, completed_date) VALUES ($1, $2)',
+      [req.params.id, today]
+    );
+    res.json({ done: true });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── Stats Route ──
+app.get('/api/stats', requireAuth, async (req, res) => {
+  try {
+    const uid   = req.user.id;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [todayTotal, todayDone, total, done, completedDays] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM tasks WHERE user_id=$1 AND due_date=$2', [uid, today]),
+      pool.query('SELECT COUNT(*) FROM tasks WHERE user_id=$1 AND due_date=$2 AND done=true', [uid, today]),
+      pool.query('SELECT COUNT(*) FROM tasks WHERE user_id=$1', [uid]),
+      pool.query('SELECT COUNT(*) FROM tasks WHERE user_id=$1 AND done=true', [uid]),
+      pool.query(
+        `SELECT DISTINCT DATE(completed_at)::text as day FROM tasks
+         WHERE user_id=$1 AND completed_at IS NOT NULL ORDER BY day DESC`,
+        [uid]
+      )
+    ]);
 
     let streak = 0, check = today;
-    for (const date of completions) {
-      if (date === check) {
+    for (const { day } of completedDays.rows) {
+      if (day === check) {
         streak++;
         const d = new Date(check);
         d.setDate(d.getDate() - 1);
         check = d.toISOString().slice(0, 10);
-      } else break;
+      } else if (day < check) break;
     }
-    return { ...h, today_done: todayDone, streak };
-  });
 
-  res.json(result);
-});
-
-app.post('/api/habits', requireAuth, (req, res) => {
-  const { name, category = 'personal' } = req.body;
-  if (!name || !name.trim()) return res.status(400).json({ error: 'name required' });
-  const info = db.prepare(
-    'INSERT INTO habits (user_id, name, category) VALUES (?, ?, ?)'
-  ).run(req.user.id, name.trim(), category);
-  res.status(201).json(db.prepare('SELECT * FROM habits WHERE id=?').get(info.lastInsertRowid));
-});
-
-app.delete('/api/habits/:id', requireAuth, (req, res) => {
-  const info = db.prepare('DELETE FROM habits WHERE id=? AND user_id=?').run(req.params.id, req.user.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'not found' });
-  res.json({ ok: true });
-});
-
-app.post('/api/habits/:id/toggle', requireAuth, (req, res) => {
-  const habit = db.prepare('SELECT id FROM habits WHERE id=? AND user_id=?').get(req.params.id, req.user.id);
-  if (!habit) return res.status(404).json({ error: 'not found' });
-
-  const today    = new Date().toISOString().slice(0, 10);
-  const existing = db.prepare(
-    'SELECT id FROM habit_completions WHERE habit_id=? AND completed_date=?'
-  ).get(req.params.id, today);
-
-  if (existing) {
-    db.prepare('DELETE FROM habit_completions WHERE id=?').run(existing.id);
-    return res.json({ done: false });
+    res.json({
+      today_total: parseInt(todayTotal.rows[0].count),
+      today_done:  parseInt(todayDone.rows[0].count),
+      total:       parseInt(total.rows[0].count),
+      done:        parseInt(done.rows[0].count),
+      streak
+    });
+  } catch(e) {
+    res.status(500).json({ error: 'Server error' });
   }
-  db.prepare('INSERT INTO habit_completions (habit_id, completed_date) VALUES (?, ?)').run(req.params.id, today);
-  res.json({ done: true });
 });
 
-// ── Stats Route (protected) ──
-app.get('/api/stats', requireAuth, (req, res) => {
-  const uid   = req.user.id;
-  const today = new Date().toISOString().slice(0, 10);
-
-  const todayTasks = db.prepare('SELECT COUNT(*) as n FROM tasks WHERE user_id=? AND due_date=?').get(uid, today);
-  const todayDone  = db.prepare('SELECT COUNT(*) as n FROM tasks WHERE user_id=? AND due_date=? AND done=1').get(uid, today);
-  const totalTasks = db.prepare('SELECT COUNT(*) as n FROM tasks WHERE user_id=?').get(uid);
-  const doneTasks  = db.prepare('SELECT COUNT(*) as n FROM tasks WHERE user_id=? AND done=1').get(uid);
-
-  const completedDays = db.prepare(`
-    SELECT DISTINCT date(completed_at) as day
-    FROM tasks WHERE user_id=? AND completed_at IS NOT NULL
-    ORDER BY day DESC
-  `).all(uid).map(r => r.day);
-
-  let streak = 0, check = today;
-  for (const day of completedDays) {
-    if (day === check) {
-      streak++;
-      const d = new Date(check);
-      d.setDate(d.getDate() - 1);
-      check = d.toISOString().slice(0, 10);
-    } else if (day < check) break;
-  }
-
-  res.json({ today_total: todayTasks.n, today_done: todayDone.n, total: totalTasks.n, done: doneTasks.n, streak });
-});
-
-// ── Fallback — unknown routes serve login page ──
+// ── Fallback ──
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'docs', 'login.html'));
 });

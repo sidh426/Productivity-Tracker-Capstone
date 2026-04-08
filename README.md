@@ -46,7 +46,8 @@ This capstone keeps that same design language and builds on top of it.
 ### Backend
 - **Node.js** — JavaScript runtime for the server
 - **Express** — lightweight web framework handling the REST API and static file serving
-- **better-sqlite3** — fast, synchronous SQLite driver; no separate database server required, data is stored in a local `.db` file
+- **pg (node-postgres)** — PostgreSQL client for Node.js; connects to a hosted Neon database so all data persists across server restarts and redeployments
+- **Neon** — serverless hosted PostgreSQL; provides a free-tier cloud database so accounts and tasks are never lost when Render recycles the server container
 - **bcryptjs** — hashes user passwords before storing them; the raw password is never saved
 - **jsonwebtoken (JWT)** — issues a signed token on login (valid 30 days); every protected API request verifies this token to identify the user
 
@@ -60,6 +61,7 @@ This capstone keeps that same design language and builds on top of it.
 
 ### Hosting
 - **Render** — hosts the Node.js backend; provides a public HTTPS URL so accounts and data sync across any device on any network
+- **Neon** — hosts the PostgreSQL database; free serverless tier, data persists permanently (not deleted when Render restarts)
 - **GitHub Pages** — hosts the static frontend; automatically detects whether the Render backend is reachable and falls back to localStorage if not
 
 ### Authentication Flow
@@ -90,11 +92,24 @@ This capstone keeps that same design language and builds on top of it.
 
 ---
 
-## Hosting on Render
+## Hosting on Render + Neon
 
-Render is the cloud platform hosting the Node.js backend so that user accounts and data sync across any device on any network.
+The backend is split across two free-tier services: Render runs the Node.js server, and Neon stores the PostgreSQL database. Separating compute from storage means the database is never lost when Render restarts, redeploys, or spins down.
 
-### How it was deployed
+### Why Neon instead of SQLite
+
+Render's free tier uses an **ephemeral filesystem** — any files written to disk (like a SQLite `.db` file) are deleted every time the server restarts, sleeps, or redeploys. This caused all user accounts and tasks to disappear on every push. Neon is a free serverless PostgreSQL host; the database lives outside of Render and persists permanently.
+
+### Setting up Neon (database)
+1. Create a free account at [neon.tech](https://neon.tech)
+2. Create a new **Project** (any name, e.g. `productivity-tracker`)
+3. On the project dashboard, copy the **Connection string** (starts with `postgresql://`)
+4. In the Render dashboard → your Web Service → **Environment** → add a new variable:
+   - **Key:** `DATABASE_URL`
+   - **Value:** *(paste the Neon connection string)*
+5. Save — Render will redeploy automatically
+
+### Setting up Render (server)
 1. Created a free account at [render.com](https://render.com) and connected the GitHub repository
 2. Created a **Web Service** with the following settings:
    - **Runtime:** Node
@@ -135,7 +150,7 @@ npm install
 node server.js
 ```
 
-Open `http://localhost:3000` in your browser. The SQLite database file (`tracker.db`) is created automatically on first run. Register an account and your data will persist locally across sessions.
+Open `http://localhost:3000` in your browser. You'll need a `DATABASE_URL` environment variable pointing to a Neon (or any PostgreSQL) connection string. Tables are created automatically on first run. Register an account and your data will persist in the database across sessions.
 
 ---
 
@@ -143,9 +158,8 @@ Open `http://localhost:3000` in your browser. The SQLite database file (`tracker
 
 ```
 Productivity-Tracker-Capstone/
-├── server.js          # Express + SQLite + JWT auth + all API routes
+├── server.js          # Express + PostgreSQL (Neon) + JWT auth + all API routes
 ├── package.json
-├── tracker.db         # SQLite database (auto-created on first run)
 └── docs/              # Static files served by Express and GitHub Pages
     ├── index.html     # Dashboard (protected — requires login)
     ├── calendar.html  # Calendar planning (protected)
