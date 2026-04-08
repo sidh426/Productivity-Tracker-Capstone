@@ -37,7 +37,7 @@ db.exec(`
 
 // ── Middleware ──
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'docs')));
 
 // ── Task Routes ──
 
@@ -211,7 +211,7 @@ app.get('/api/stats', (req, res) => {
 
 // ── Fallback ──
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'docs', 'index.html'));
 });
 
 app.listen(PORT, () => {

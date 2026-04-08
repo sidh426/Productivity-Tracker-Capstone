@@ -13,31 +13,94 @@ themeToggle.addEventListener('click', () => {
     syncIcon();
 });
 
-// ── API helper ──
-async function api(method, path, body) {
-    const res = await fetch(path, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : {},
-        body: body ? JSON.stringify(body) : undefined
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+// ── Backend detection ──
+let useBackend = false;
+
+async function detectBackend() {
+    try {
+        const res = await fetch('/api/stats', { signal: AbortSignal.timeout(1500) });
+        useBackend = res.ok;
+    } catch(e) {
+        useBackend = false;
+    }
 }
 
+// ── localStorage helpers ──
+const LS_TASKS = 'pt_tasks_v2';
+function lsGetTasks()   { return JSON.parse(localStorage.getItem(LS_TASKS) || '[]'); }
+function lsSaveTasks(t) { localStorage.setItem(LS_TASKS, JSON.stringify(t)); }
+
+// ── Unified data layer ──
+const Store = {
+    async getTasksByDate(dateStr) {
+        if (useBackend) {
+            const r = await fetch(`/api/tasks?date=${dateStr}`); return r.json();
+        }
+        return lsGetTasks().filter(t => t.due_date === dateStr);
+    },
+
+    async getCalendarData(year, month) {
+        if (useBackend) {
+            const r = await fetch(`/api/tasks/calendar?year=${year}&month=${month}`); return r.json();
+        }
+        const prefix = `${year}-${String(month).padStart(2, '0')}`;
+        const tasks  = lsGetTasks().filter(t => t.due_date && t.due_date.startsWith(prefix));
+        const map    = {};
+        tasks.forEach(t => {
+            if (!map[t.due_date]) map[t.due_date] = { due_date: t.due_date, total: 0, done: 0 };
+            map[t.due_date].total++;
+            if (t.done) map[t.due_date].done++;
+        });
+        return Object.values(map);
+    },
+
+    async addTask(text, category, due_date) {
+        if (useBackend) {
+            const r = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, category, due_date })
+            }); return r.json();
+        }
+        const tasks = lsGetTasks();
+        const task  = { id: Date.now(), text, category, done: 0, due_date, created_at: due_date };
+        tasks.push(task);
+        lsSaveTasks(tasks);
+        return task;
+    },
+
+    async toggleTask(id, done) {
+        if (useBackend) {
+            await fetch(`/api/tasks/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ done })
+            }); return;
+        }
+        const tasks = lsGetTasks();
+        const t = tasks.find(x => x.id === id);
+        if (t) { t.done = done ? 1 : 0; t.completed_at = done ? new Date().toISOString() : null; }
+        lsSaveTasks(tasks);
+    },
+
+    async deleteTask(id) {
+        if (useBackend) {
+            await fetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
+        }
+        lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
+    }
+};
+
 // ── State ──
-const now          = new Date();
-let viewYear       = now.getFullYear();
-let viewMonth      = now.getMonth(); // 0-indexed
-let selectedDate   = null;           // 'YYYY-MM-DD'
-let calendarData   = {};             // date -> { total, done }
+const now        = new Date();
+let viewYear     = now.getFullYear();
+let viewMonth    = now.getMonth(); // 0-indexed
+let selectedDate = null;
+let calendarData = {};
 
 // ── Helpers ──
 function pad(n) { return String(n).padStart(2, '0'); }
-
-function toDateStr(year, month, day) {
-    return `${year}-${pad(month + 1)}-${pad(day)}`;
-}
-
+function toDateStr(year, month, day) { return `${year}-${pad(month + 1)}-${pad(day)}`; }
 function friendlyDate(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString('en-US', {
@@ -47,7 +110,7 @@ function friendlyDate(dateStr) {
 
 // ── Load calendar dots for current view month ──
 async function loadCalendarData() {
-    const rows = await api('GET', `/api/tasks/calendar?year=${viewYear}&month=${viewMonth + 1}`);
+    const rows = await Store.getCalendarData(viewYear, viewMonth + 1);
     calendarData = {};
     rows.forEach(r => { calendarData[r.due_date] = { total: r.total, done: r.done }; });
 }
@@ -57,23 +120,22 @@ function renderCalendar() {
     const grid  = document.getElementById('calendar-grid');
     const label = document.getElementById('cal-month-label');
 
-    // Remove day cells (keep headers)
     Array.from(grid.querySelectorAll('.cal-day')).forEach(el => el.remove());
 
     label.textContent = new Date(viewYear, viewMonth, 1).toLocaleDateString('en-US', {
         month: 'long', year: 'numeric'
     });
 
-    const firstDay  = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+    const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const todayStr  = now.toISOString().slice(0, 10);
+    const todayStr    = now.toISOString().slice(0, 10);
+    const prevDays    = new Date(viewYear, viewMonth, 0).getDate();
 
-    // Leading blanks from previous month
-    const prevMonthDays = new Date(viewYear, viewMonth, 0).getDate();
+    // Leading blanks
     for (let i = firstDay - 1; i >= 0; i--) {
         const cell = document.createElement('div');
         cell.className = 'cal-day other-month';
-        cell.innerHTML = `<span class="cal-day-num">${prevMonthDays - i}</span>`;
+        cell.innerHTML = `<span class="cal-day-num">${prevDays - i}</span>`;
         grid.appendChild(cell);
     }
 
@@ -82,7 +144,7 @@ function renderCalendar() {
         const dateStr = toDateStr(viewYear, viewMonth, d);
         const cell    = document.createElement('div');
         const classes = ['cal-day'];
-        if (dateStr === todayStr)    classes.push('today');
+        if (dateStr === todayStr)     classes.push('today');
         if (dateStr === selectedDate) classes.push('selected');
         cell.className = classes.join(' ');
 
@@ -91,12 +153,11 @@ function renderCalendar() {
         num.textContent = d;
         cell.appendChild(num);
 
-        // Task dots
         const info = calendarData[dateStr];
         if (info && info.total > 0) {
-            const dots = document.createElement('div');
+            const dots  = document.createElement('div');
             dots.className = 'cal-dots';
-            const count = Math.min(info.total, 4);
+            const count   = Math.min(info.total, 4);
             const allDone = info.done >= info.total;
             for (let i = 0; i < count; i++) {
                 const dot = document.createElement('span');
@@ -125,37 +186,28 @@ function renderCalendar() {
 async function selectDay(dateStr) {
     selectedDate = dateStr;
 
-    // Update calendar highlight
-    document.querySelectorAll('.cal-day.selected').forEach(el => el.classList.remove('selected'));
     document.querySelectorAll('.cal-day').forEach(el => {
-        if (!el.classList.contains('other-month')) {
-            const num = el.querySelector('.cal-day-num');
-            if (num) {
-                const [, , d] = dateStr.split('-');
-                if (parseInt(num.textContent) === parseInt(d)) {
-                    el.classList.add('selected');
-                }
-            }
-        }
+        if (el.classList.contains('other-month')) return;
+        const num = el.querySelector('.cal-day-num');
+        const [, , d] = dateStr.split('-');
+        el.classList.toggle('selected', num && parseInt(num.textContent) === parseInt(d));
     });
 
-    // Update panel title
-    document.getElementById('day-panel-title').textContent = friendlyDate(dateStr);
-    document.getElementById('day-placeholder').style.display = 'none';
-    document.getElementById('day-task-form').style.display   = 'flex';
-    document.getElementById('day-task-form').style.flexWrap  = 'wrap';
+    document.getElementById('day-panel-title').textContent    = friendlyDate(dateStr);
+    document.getElementById('day-placeholder').style.display  = 'none';
+    document.getElementById('day-task-form').style.display    = 'flex';
+    document.getElementById('day-task-form').style.flexWrap   = 'wrap';
 
     await loadDayTasks(dateStr);
 }
 
 // ── Load tasks for selected day ──
 async function loadDayTasks(dateStr) {
-    const tasks    = await api('GET', `/api/tasks?date=${dateStr}`);
+    const tasks    = await Store.getTasksByDate(dateStr);
     const list     = document.getElementById('day-task-list');
     const emptyMsg = document.getElementById('day-empty-msg');
 
     Array.from(list.querySelectorAll('.task-item')).forEach(el => el.remove());
-
     emptyMsg.style.display = tasks.length === 0 ? 'block' : 'none';
 
     tasks.forEach(task => {
@@ -167,7 +219,7 @@ async function loadDayTasks(dateStr) {
         cb.type    = 'checkbox';
         cb.checked = !!task.done;
         cb.addEventListener('change', async () => {
-            await api('PATCH', `/api/tasks/${task.id}`, { done: cb.checked });
+            await Store.toggleTask(task.id, cb.checked);
             await refreshAfterChange();
         });
 
@@ -185,7 +237,7 @@ async function loadDayTasks(dateStr) {
         del.title     = 'Remove';
         del.innerHTML = '&#10005;';
         del.addEventListener('click', async () => {
-            await api('DELETE', `/api/tasks/${task.id}`);
+            await Store.deleteTask(task.id);
             await refreshAfterChange();
         });
 
@@ -210,7 +262,7 @@ document.getElementById('day-task-form').addEventListener('submit', async e => {
     const text     = input.value.trim();
     if (!text || !selectedDate) return;
     const category = document.getElementById('day-cat-select').value;
-    await api('POST', '/api/tasks', { text, category, due_date: selectedDate });
+    await Store.addTask(text, category, selectedDate);
     input.value = '';
     input.focus();
     await refreshAfterChange();
@@ -225,8 +277,8 @@ async function changeMonth(delta) {
     renderCalendar();
 }
 
-document.getElementById('cal-prev').addEventListener('click', () => changeMonth(-1));
-document.getElementById('cal-next').addEventListener('click', () => changeMonth(1));
+document.getElementById('cal-prev').addEventListener('click',  () => changeMonth(-1));
+document.getElementById('cal-next').addEventListener('click',  () => changeMonth(1));
 document.getElementById('cal-today').addEventListener('click', async () => {
     viewYear  = now.getFullYear();
     viewMonth = now.getMonth();
@@ -237,8 +289,8 @@ document.getElementById('cal-today').addEventListener('click', async () => {
 
 // ── Init ──
 (async () => {
+    await detectBackend();
     await loadCalendarData();
     renderCalendar();
-    // Auto-select today
     await selectDay(now.toISOString().slice(0, 10));
 })();

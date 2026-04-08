@@ -1,5 +1,5 @@
 // ── Dark mode toggle ──
-const root       = document.documentElement;
+const root        = document.documentElement;
 const themeToggle = document.getElementById('theme-toggle');
 
 function syncIcon() {
@@ -18,39 +18,176 @@ document.getElementById('date-display').textContent = new Date().toLocaleDateStr
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
 });
 
-// Set today as default due date
 const today = new Date().toISOString().slice(0, 10);
 document.getElementById('due-date-input').value = today;
 
-// ── API helpers ──
-async function api(method, path, body) {
-    const res = await fetch(path, {
-        method,
-        headers: body ? { 'Content-Type': 'application/json' } : {},
-        body: body ? JSON.stringify(body) : undefined
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+// ── Backend detection ──
+// Tries the real API first; falls back to localStorage if unavailable (e.g. GitHub Pages)
+let useBackend = false;
+
+async function detectBackend() {
+    try {
+        const res = await fetch('/api/stats', { signal: AbortSignal.timeout(1500) });
+        useBackend = res.ok;
+    } catch(e) {
+        useBackend = false;
+    }
 }
 
+// ── localStorage store (fallback) ──
+const LS_TASKS  = 'pt_tasks_v2';
+const LS_HABITS = 'pt_habits_v2';
+
+function lsGetTasks()    { return JSON.parse(localStorage.getItem(LS_TASKS)  || '[]'); }
+function lsSaveTasks(t)  { localStorage.setItem(LS_TASKS,  JSON.stringify(t)); }
+function lsGetHabits()   { return JSON.parse(localStorage.getItem(LS_HABITS) || '[]'); }
+function lsSaveHabits(h) { localStorage.setItem(LS_HABITS, JSON.stringify(h)); }
+
+// ── Unified data layer ──
+const Store = {
+    async getTasks() {
+        if (useBackend) {
+            const r = await fetch('/api/tasks'); return r.json();
+        }
+        return lsGetTasks();
+    },
+
+    async addTask(text, category, due_date) {
+        if (useBackend) {
+            const r = await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, category, due_date })
+            }); return r.json();
+        }
+        const tasks = lsGetTasks();
+        const task  = { id: Date.now(), text, category, done: 0, due_date: due_date || null, created_at: today };
+        tasks.push(task);
+        lsSaveTasks(tasks);
+        return task;
+    },
+
+    async toggleTask(id, done) {
+        if (useBackend) {
+            await fetch(`/api/tasks/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ done })
+            }); return;
+        }
+        const tasks = lsGetTasks();
+        const t = tasks.find(x => x.id === id);
+        if (t) { t.done = done ? 1 : 0; t.completed_at = done ? new Date().toISOString() : null; }
+        lsSaveTasks(tasks);
+    },
+
+    async deleteTask(id) {
+        if (useBackend) {
+            await fetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
+        }
+        lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
+    },
+
+    async getStats() {
+        if (useBackend) {
+            const r = await fetch('/api/stats'); return r.json();
+        }
+        const tasks  = lsGetTasks();
+        const todayT = tasks.filter(t => t.due_date === today);
+        const done   = tasks.filter(t => t.done);
+        const todayD = todayT.filter(t => t.done);
+
+        // Calculate streak from completion timestamps
+        const days = [...new Set(
+            done.map(t => t.completed_at ? t.completed_at.slice(0, 10) : null).filter(Boolean)
+        )].sort().reverse();
+        let streak = 0, check = today;
+        for (const d of days) {
+            if (d === check) {
+                streak++;
+                const dt = new Date(check);
+                dt.setDate(dt.getDate() - 1);
+                check = dt.toISOString().slice(0, 10);
+            } else if (d < check) break;
+        }
+        return { total: tasks.length, done: done.length, today_total: todayT.length, today_done: todayD.length, streak };
+    },
+
+    async getHabits() {
+        if (useBackend) {
+            const r = await fetch('/api/habits'); return r.json();
+        }
+        return lsGetHabits().map(h => {
+            const completions = h.completions || [];
+            const todayDone   = completions.includes(today);
+            const sorted      = [...completions].sort().reverse();
+            let streak = 0, check = today;
+            for (const d of sorted) {
+                if (d === check) {
+                    streak++;
+                    const dt = new Date(check);
+                    dt.setDate(dt.getDate() - 1);
+                    check = dt.toISOString().slice(0, 10);
+                } else if (d < check) break;
+            }
+            return { ...h, today_done: todayDone, streak };
+        });
+    },
+
+    async addHabit(name, category) {
+        if (useBackend) {
+            const r = await fetch('/api/habits', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, category })
+            }); return r.json();
+        }
+        const habits = lsGetHabits();
+        const h = { id: Date.now(), name, category, completions: [], created_at: today };
+        habits.push(h);
+        lsSaveHabits(habits);
+        return h;
+    },
+
+    async toggleHabit(id) {
+        if (useBackend) {
+            const r = await fetch(`/api/habits/${id}/toggle`, { method: 'POST' }); return r.json();
+        }
+        const habits = lsGetHabits();
+        const h = habits.find(x => x.id === id);
+        if (!h) return;
+        const idx = (h.completions || []).indexOf(today);
+        if (idx === -1) h.completions.push(today);
+        else h.completions.splice(idx, 1);
+        lsSaveHabits(habits);
+        return { done: idx === -1 };
+    },
+
+    async deleteHabit(id) {
+        if (useBackend) {
+            await fetch(`/api/habits/${id}`, { method: 'DELETE' }); return;
+        }
+        lsSaveHabits(lsGetHabits().filter(x => x.id !== id));
+    }
+};
+
 // ── State ──
-let tasks       = [];
+let tasks        = [];
 let activeFilter = 'all';
 
 // ── Stats & Progress ──
 async function loadStats() {
     try {
-        const s = await api('GET', '/api/stats');
-        document.getElementById('stat-total').textContent     = s.total;
+        const s = await Store.getStats();
+        document.getElementById('stat-total').textContent      = s.total;
         document.getElementById('stat-today-done').textContent = s.today_done;
-        document.getElementById('stat-left').textContent      = s.total - s.done;
-        document.getElementById('stat-streak').textContent    = s.streak;
+        document.getElementById('stat-left').textContent       = s.total - s.done;
+        document.getElementById('stat-streak').textContent     = s.streak;
 
-        // Today's progress bar
         const card = document.getElementById('today-progress-card');
         if (s.today_total > 0) {
             card.style.display = 'block';
-            const pct = Math.round((s.today_done / s.today_total) * 100);
+            const pct  = Math.round((s.today_done / s.today_total) * 100);
             const fill = document.getElementById('progress-fill');
             fill.style.width = pct + '%';
             fill.classList.toggle('complete', pct === 100);
@@ -60,9 +197,7 @@ async function loadStats() {
         } else {
             card.style.display = 'none';
         }
-    } catch(e) {
-        console.error('Stats error:', e);
-    }
+    } catch(e) { console.error('Stats error:', e); }
 }
 
 // ── Task rendering ──
@@ -71,17 +206,12 @@ function formatDate(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-
-function isOverdue(dateStr) {
-    if (!dateStr) return false;
-    return dateStr < today;
-}
+function isOverdue(dateStr) { return dateStr && dateStr < today; }
 
 function renderTasks() {
     const list     = document.getElementById('task-list');
     const emptyMsg = document.getElementById('empty-msg');
 
-    // Clear task items
     Array.from(list.querySelectorAll('.task-item')).forEach(el => el.remove());
 
     const filtered = activeFilter === 'all'
@@ -98,11 +228,11 @@ function renderTasks() {
         li.className = 'task-item' + (task.done ? ' done' : '');
         if (task.category) li.dataset.category = task.category;
 
-        const cb    = document.createElement('input');
-        cb.type     = 'checkbox';
-        cb.checked  = !!task.done;
+        const cb   = document.createElement('input');
+        cb.type    = 'checkbox';
+        cb.checked = !!task.done;
         cb.addEventListener('change', async () => {
-            await api('PATCH', `/api/tasks/${task.id}`, { done: cb.checked });
+            await Store.toggleTask(task.id, cb.checked);
             await loadAll();
         });
 
@@ -111,12 +241,12 @@ function renderTasks() {
         label.textContent = task.text;
         label.addEventListener('click', () => cb.click());
 
-        const meta  = document.createElement('div');
+        const meta = document.createElement('div');
         meta.className = 'task-meta';
 
         if (task.due_date) {
             const due = document.createElement('span');
-            due.className = 'due-date' + (isOverdue(task.due_date) && !task.done ? ' overdue' : '');
+            due.className   = 'due-date' + (isOverdue(task.due_date) && !task.done ? ' overdue' : '');
             due.textContent = formatDate(task.due_date);
             meta.appendChild(due);
         }
@@ -131,7 +261,7 @@ function renderTasks() {
         del.title     = 'Remove';
         del.innerHTML = '&#10005;';
         del.addEventListener('click', async () => {
-            await api('DELETE', `/api/tasks/${task.id}`);
+            await Store.deleteTask(task.id);
             await loadAll();
         });
 
@@ -144,7 +274,7 @@ function renderTasks() {
 }
 
 async function loadTasks() {
-    tasks = await api('GET', '/api/tasks');
+    tasks = await Store.getTasks();
     renderTasks();
 }
 
@@ -161,12 +291,12 @@ document.querySelectorAll('.filter-btn').forEach(btn => {
 // ── Add task ──
 document.getElementById('task-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const input   = document.getElementById('task-input');
-    const text    = input.value.trim();
+    const input    = document.getElementById('task-input');
+    const text     = input.value.trim();
     if (!text) return;
     const category = document.getElementById('cat-select').value;
     const due_date = document.getElementById('due-date-input').value || null;
-    await api('POST', '/api/tasks', { text, category, due_date });
+    await Store.addTask(text, category, due_date);
     input.value = '';
     input.focus();
     await loadAll();
@@ -180,7 +310,6 @@ function renderHabits() {
     const emptyMsg = document.getElementById('habit-empty-msg');
 
     Array.from(list.querySelectorAll('.habit-item')).forEach(el => el.remove());
-
     emptyMsg.style.display = habits.length === 0 ? 'block' : 'none';
 
     habits.forEach(habit => {
@@ -193,7 +322,7 @@ function renderHabits() {
         check.title     = habit.today_done ? 'Mark incomplete' : 'Mark complete';
         check.innerHTML = habit.today_done ? '✓' : '';
         check.addEventListener('click', async () => {
-            await api('POST', `/api/habits/${habit.id}/toggle`);
+            await Store.toggleHabit(habit.id);
             await loadHabits();
             await loadStats();
         });
@@ -215,7 +344,7 @@ function renderHabits() {
         del.title     = 'Remove';
         del.innerHTML = '&#10005;';
         del.addEventListener('click', async () => {
-            await api('DELETE', `/api/habits/${habit.id}`);
+            await Store.deleteHabit(habit.id);
             await loadHabits();
         });
 
@@ -229,7 +358,7 @@ function renderHabits() {
 }
 
 async function loadHabits() {
-    habits = await api('GET', '/api/habits');
+    habits = await Store.getHabits();
     renderHabits();
 }
 
@@ -239,7 +368,7 @@ document.getElementById('habit-form').addEventListener('submit', async e => {
     const name     = input.value.trim();
     if (!name) return;
     const category = document.getElementById('habit-cat-select').value;
-    await api('POST', '/api/habits', { name, category });
+    await Store.addHabit(name, category);
     input.value = '';
     input.focus();
     await loadHabits();
@@ -250,5 +379,8 @@ async function loadAll() {
     await Promise.all([loadTasks(), loadStats()]);
 }
 
-loadAll();
-loadHabits();
+(async () => {
+    await detectBackend();
+    await loadAll();
+    await loadHabits();
+})();
