@@ -29,6 +29,9 @@ async function detectBackend() {
     useBackend = await isBackendAvailable();
 }
 
+// True only when backend is reachable AND user is logged in (not guest)
+function useAPI() { return useBackend && !isGuestMode(); }
+
 // ── localStorage store (fallback) ──
 const LS_TASKS  = 'pt_tasks_v2';
 const LS_HABITS = 'pt_habits_v2';
@@ -41,14 +44,14 @@ function lsSaveHabits(h) { localStorage.setItem(LS_HABITS, JSON.stringify(h)); }
 // ── Unified data layer ──
 const Store = {
     async getTasks() {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/tasks'); return r.json();
         }
         return lsGetTasks();
     },
 
     async addTask(text, category, due_date) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -63,7 +66,7 @@ const Store = {
     },
 
     async toggleTask(id, done) {
-        if (useBackend) {
+        if (useAPI()) {
             await authFetch(`/api/tasks/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -77,14 +80,14 @@ const Store = {
     },
 
     async deleteTask(id) {
-        if (useBackend) {
+        if (useAPI()) {
             await authFetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
     },
 
     async getStats() {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/stats'); return r.json();
         }
         const tasks  = lsGetTasks();
@@ -109,7 +112,7 @@ const Store = {
     },
 
     async getHabits() {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/habits'); return r.json();
         }
         return lsGetHabits().map(h => {
@@ -130,7 +133,7 @@ const Store = {
     },
 
     async addHabit(name, category) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/habits', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -145,7 +148,7 @@ const Store = {
     },
 
     async toggleHabit(id) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch(`/api/habits/${id}/toggle`, { method: 'POST' }); return r.json();
         }
         const habits = lsGetHabits();
@@ -159,7 +162,7 @@ const Store = {
     },
 
     async deleteHabit(id) {
-        if (useBackend) {
+        if (useAPI()) {
             await authFetch(`/api/habits/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveHabits(lsGetHabits().filter(x => x.id !== id));
@@ -380,7 +383,7 @@ async function loadAll() {
 
 (async () => {
     await detectBackend();
-    if (useBackend) {
+    if (useAPI()) {
         const authed = await requireAuth();
         // If not authed and not in guest mode, a redirect to login is in progress — stop here
         if (!authed && !isGuestMode()) return;

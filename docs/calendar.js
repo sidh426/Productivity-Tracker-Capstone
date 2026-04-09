@@ -16,6 +16,8 @@ themeToggle.addEventListener('click', () => {
 // ── Backend detection ──
 let useBackend = false;
 
+function useAPI() { return useBackend && !isGuestMode(); }
+
 async function detectBackend() {
     useBackend = await isBackendAvailable();
 }
@@ -28,14 +30,14 @@ function lsSaveTasks(t) { localStorage.setItem(LS_TASKS, JSON.stringify(t)); }
 // ── Unified data layer ──
 const Store = {
     async getTasksByDate(dateStr) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch(`/api/tasks?date=${dateStr}`); return r.json();
         }
         return lsGetTasks().filter(t => t.due_date === dateStr);
     },
 
     async getCalendarData(year, month) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch(`/api/tasks/calendar?year=${year}&month=${month}`); return r.json();
         }
         const prefix = `${year}-${String(month).padStart(2, '0')}`;
@@ -50,7 +52,7 @@ const Store = {
     },
 
     async addTask(text, category, due_date) {
-        if (useBackend) {
+        if (useAPI()) {
             const r = await authFetch('/api/tasks', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -65,7 +67,7 @@ const Store = {
     },
 
     async toggleTask(id, done) {
-        if (useBackend) {
+        if (useAPI()) {
             await authFetch(`/api/tasks/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -79,7 +81,7 @@ const Store = {
     },
 
     async deleteTask(id) {
-        if (useBackend) {
+        if (useAPI()) {
             await authFetch(`/api/tasks/${id}`, { method: 'DELETE' }); return;
         }
         lsSaveTasks(lsGetTasks().filter(x => x.id !== id));
@@ -285,7 +287,7 @@ document.getElementById('cal-today').addEventListener('click', async () => {
 // ── Init ──
 (async () => {
     await detectBackend();
-    if (useBackend) {
+    if (useAPI()) {
         const authed = await requireAuth();
         if (!authed && !isGuestMode()) return;
     } else {
