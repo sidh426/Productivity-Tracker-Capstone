@@ -167,18 +167,20 @@ app.get('/api/me', requireAuth, async (req, res) => {
 
 // ── Task Routes ──
 
+const TASK_COLS = `id, user_id, text, category, done, due_date::text AS due_date, created_at::text AS created_at, completed_at`;
+
 app.get('/api/tasks', requireAuth, async (req, res) => {
   try {
     const { date } = req.query;
     if (date) {
       const r = await pool.query(
-        'SELECT * FROM tasks WHERE user_id=$1 AND due_date=$2 ORDER BY created_at DESC',
+        `SELECT ${TASK_COLS} FROM tasks WHERE user_id=$1 AND due_date=$2 ORDER BY created_at DESC`,
         [req.user.id, date]
       );
       return res.json(r.rows);
     }
     const r = await pool.query(
-      'SELECT * FROM tasks WHERE user_id=$1 ORDER BY due_date ASC NULLS LAST, created_at DESC',
+      `SELECT ${TASK_COLS} FROM tasks WHERE user_id=$1 ORDER BY due_date ASC NULLS LAST, created_at DESC`,
       [req.user.id]
     );
     res.json(r.rows);
@@ -211,7 +213,7 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
     const { text, category = 'personal', due_date } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'text required' });
     const r = await pool.query(
-      'INSERT INTO tasks (user_id, text, category, due_date) VALUES ($1, $2, $3, $4) RETURNING *',
+      `INSERT INTO tasks (user_id, text, category, due_date) VALUES ($1, $2, $3, $4) RETURNING ${TASK_COLS}`,
       [req.user.id, text.trim(), category, due_date || null]
     );
     res.status(201).json(r.rows[0]);
@@ -239,7 +241,7 @@ app.patch('/api/tasks/:id', requireAuth, async (req, res) => {
 
     const r = await pool.query(
       `UPDATE tasks SET done=$1, text=$2, category=$3, due_date=$4, completed_at=$5
-       WHERE id=$6 AND user_id=$7 RETURNING *`,
+       WHERE id=$6 AND user_id=$7 RETURNING ${TASK_COLS}`,
       [newDone, newText, newCategory, newDueDate, completedAt, req.params.id, req.user.id]
     );
     res.json(r.rows[0]);

@@ -82,16 +82,16 @@
         });
 
         (async () => {
+            clearGuestMode();
+
             const backendUp = await isBackendAvailable();
 
             if (!backendUp) {
-                // Static mode — show the no-backend card
                 document.getElementById('register-card').style.display = 'none';
                 document.getElementById('static-card').style.display   = 'block';
                 return;
             }
 
-            // Backend is up — check if already logged in
             const token = getToken();
             if (token) {
                 const res = await authFetch('/api/me');

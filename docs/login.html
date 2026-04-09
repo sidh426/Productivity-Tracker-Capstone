@@ -78,24 +78,26 @@
         });
 
         (async () => {
+            // Arriving at login.html always means the user wants to sign in —
+            // clear guest mode so it doesn't interfere with auth checks.
+            clearGuestMode();
+
             const backendUp = await isBackendAvailable();
 
             if (!backendUp) {
-                // Static mode — show the no-backend card
                 document.getElementById('login-card').style.display  = 'none';
                 document.getElementById('static-card').style.display = 'block';
                 return;
             }
 
-            // Backend is up — check if already logged in
+            // If already logged in with a valid token, go to dashboard
             const token = getToken();
             if (token) {
                 const res = await authFetch('/api/me');
                 if (res.ok) { window.location.href = 'index.html'; return; }
-                clearAuth();
+                clearAuth(); // token expired or invalid — show form
             }
 
-            // Show login form
             document.getElementById('login-card').style.display = 'block';
         })();
 

@@ -198,10 +198,14 @@ async function loadStats() {
 // ── Task rendering ──
 function formatDate(dateStr) {
     if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-').map(Number);
+    const iso = String(dateStr).slice(0, 10); // handle full ISO strings from pg
+    const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-function isOverdue(dateStr) { return dateStr && dateStr < today; }
+function isOverdue(dateStr) {
+    if (!dateStr) return false;
+    return String(dateStr).slice(0, 10) < today;
+}
 
 function renderTasks() {
     const list     = document.getElementById('task-list');
