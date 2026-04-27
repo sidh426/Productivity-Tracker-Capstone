@@ -247,9 +247,10 @@ main {
 
 /* ── Task form ── */
 .task-form {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
     gap: 0.6rem;
-    flex-wrap: wrap;
+    overflow: hidden;
 }
 
 .task-form input[type="text"],
@@ -264,10 +265,10 @@ main {
     background: var(--bg);
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
-
-.task-form input[type="text"] { flex: 1; min-width: 160px; }
-.task-form input[type="date"] { min-width: 140px; max-width: 100%; }
 
 .task-form input:focus,
 .task-form select:focus {
@@ -873,20 +874,17 @@ footer {
     }
     .day-panel { position: static; }
 
-    /* Stack task form — clip overflow so iOS date input stays inside card */
+    /* Single-column grid — every input fills the full card width */
     .task-form {
-        flex-direction: column;
+        grid-template-columns: 1fr;
         gap: 0.5rem;
-        overflow: hidden;
     }
     .task-form input[type="text"],
     .task-form input[type="date"],
     .task-form select,
     .task-form .btn {
-        display: block;
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: 100% !important;
+        width: 100%;
+        min-width: 0;
         box-sizing: border-box;
     }
 }
@@ -955,12 +953,8 @@ footer {
     .card     { padding: 1rem; }
     .day-panel { padding: 1rem; }
 
-    /* ── Task form: full vertical stack ── */
-    .task-form { flex-direction: column; gap: 0.5rem; }
-    .task-form input[type="text"],
-    .task-form input[type="date"],
-    .task-form select,
-    .task-form .btn { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+    /* ── Task form: already single-column from 700px rule ── */
+    .task-form { gap: 0.5rem; }
 
     /* ── Task items: let meta wrap under the label ── */
     .task-item { flex-wrap: wrap; }
