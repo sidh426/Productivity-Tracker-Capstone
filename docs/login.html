@@ -42,6 +42,20 @@
             </p>
         </div>
 
+        <!-- Shown while Render backend is cold-starting -->
+        <div class="auth-card" id="waking-card" style="display:none;">
+            <div class="spinner"></div>
+            <h1 class="auth-title" style="margin-top:1.25rem;">Server is waking up</h1>
+            <p class="auth-subtitle" id="waking-msg">Connecting to backend…</p>
+            <p style="font-size:0.875rem;color:var(--muted);line-height:1.7;margin-bottom:1.75rem;">
+                The server sleeps after inactivity and takes 30–60 seconds to wake up.
+                Hang tight — the login form will appear automatically.
+            </p>
+            <a href="#" id="waking-guest-link" class="btn auth-btn" style="display:block;text-align:center;text-decoration:none;background:none;border:1px solid var(--border);color:var(--muted);">
+                Continue without account →
+            </a>
+        </div>
+
         <!-- Shown when no backend (GitHub Pages / static mode) -->
         <div class="auth-card" id="static-card" style="display:none;">
             <h1 class="auth-title">&#9675; Productivity Tracker</h1>
@@ -78,35 +92,54 @@
         });
 
         (async () => {
-            // Arriving at login.html always means the user wants to sign in —
-            // clear guest mode so it doesn't interfere with auth checks.
             clearGuestMode();
 
-            const backendUp = await isBackendAvailable();
+            const MAX_ATTEMPTS = 12;   // ~60 seconds total
+            const RETRY_MS     = 5000;
 
-            if (!backendUp) {
-                document.getElementById('login-card').style.display  = 'none';
+            // First quick probe
+            let up = await pingBackend(4000);
+
+            if (!up) {
+                // Show waking card and keep retrying
+                const wakingCard = document.getElementById('waking-card');
+                const msgEl      = document.getElementById('waking-msg');
+                wakingCard.style.display = 'block';
+
+                for (let i = 1; i < MAX_ATTEMPTS && !up; i++) {
+                    msgEl.textContent = `Still connecting… ${i * 5}s elapsed`;
+                    await new Promise(r => setTimeout(r, RETRY_MS));
+                    up = await pingBackend(5000);
+                }
+
+                wakingCard.style.display = 'none';
+            }
+
+            if (!up) {
+                // Gave up — backend unreachable, show static mode
                 document.getElementById('static-card').style.display = 'block';
                 return;
             }
 
-            // If already logged in with a valid token, go to dashboard
+            // Backend is up — check if already logged in
             const token = getToken();
             if (token) {
                 const res = await authFetch('/api/me');
                 if (res.ok) { window.location.href = 'index.html'; return; }
-                clearAuth(); // token expired or invalid — show form
+                clearAuth();
             }
 
             document.getElementById('login-card').style.display = 'block';
         })();
 
-        // Guest mode — set flag then navigate to dashboard
-        document.getElementById('guest-link').addEventListener('click', e => {
+        // Guest mode links — waking card + login card both have one
+        function goGuest(e) {
             e.preventDefault();
             setGuestMode();
             window.location.href = 'index.html';
-        });
+        }
+        document.getElementById('guest-link').addEventListener('click', goGuest);
+        document.getElementById('waking-guest-link').addEventListener('click', goGuest);
 
         // Login form submit
         document.getElementById('login-form').addEventListener('submit', async e => {

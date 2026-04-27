@@ -29,16 +29,23 @@ let _backendAvailable = null;
 
 async function isBackendAvailable() {
     if (_backendAvailable !== null) return _backendAvailable;
+    return pingBackend(3000);
+}
+
+// Single probe — bypasses the cache so login page can retry during cold start.
+// Sets the cache on success so the rest of the app sees the result immediately.
+async function pingBackend(timeoutMs = 5000) {
     try {
         const res = await fetch(`${API_BASE}/api/me`, {
             headers: { 'Authorization': `Bearer ${getToken() || ''}` },
-            signal: AbortSignal.timeout(3000)
+            signal: AbortSignal.timeout(timeoutMs)
         });
-        _backendAvailable = (res.status === 200 || res.status === 401);
+        const ok = res.status === 200 || res.status === 401;
+        if (ok) _backendAvailable = true;
+        return ok;
     } catch(e) {
-        _backendAvailable = false;
+        return false;
     }
-    return _backendAvailable;
 }
 
 // ── Auth fetch — wraps fetch with Authorization header and correct base URL ──

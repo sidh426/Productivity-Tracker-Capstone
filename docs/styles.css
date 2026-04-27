@@ -714,6 +714,21 @@ main {
 }
 .auth-switch a:hover { text-decoration: underline; }
 
+/* ── Waking-up spinner ── */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.85s linear infinite;
+    margin: 0 auto;
+}
+
 /* ── Footer ── */
 footer {
     text-align: center;
