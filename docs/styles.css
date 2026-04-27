@@ -172,7 +172,11 @@ main {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text);
+    margin-bottom: 0.85rem;
 }
+
+/* card-header already wraps h2 in flex — cancel out double margin */
+.card-header h2 { margin-bottom: 0; }
 
 /* ── Buttons ── */
 .btn {
@@ -867,6 +871,19 @@ footer {
         grid-template-columns: 1fr;
     }
     .day-panel { position: static; }
+
+    /* Stack task form at tablet width so date input never overflows */
+    .task-form {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .task-form input[type="text"],
+    .task-form input[type="date"],
+    .task-form select,
+    .task-form .btn {
+        width: 100%;
+        min-width: unset;
+    }
 }
 
 /* Phone — 540px: two-row header, stacked form, tighter everything */
