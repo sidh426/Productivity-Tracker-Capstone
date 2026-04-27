@@ -116,8 +116,25 @@
             }
 
             if (!up) {
-                // Gave up — backend unreachable, show static mode
+                // Gave up on fast retries — show static card but keep checking
+                // every 30 seconds in the background so the form appears automatically
+                // if the server eventually wakes up.
                 document.getElementById('static-card').style.display = 'block';
+
+                const bgInterval = setInterval(async () => {
+                    const alive = await pingBackend(5000);
+                    if (!alive) return;
+                    clearInterval(bgInterval);
+                    document.getElementById('static-card').style.display = 'none';
+                    const tok = getToken();
+                    if (tok) {
+                        const r = await authFetch('/api/me');
+                        if (r.ok) { window.location.href = 'index.html'; return; }
+                        clearAuth();
+                    }
+                    document.getElementById('login-card').style.display = 'block';
+                }, 30000);
+
                 return;
             }
 

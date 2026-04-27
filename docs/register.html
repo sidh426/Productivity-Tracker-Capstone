@@ -119,6 +119,21 @@
 
             if (!up) {
                 document.getElementById('static-card').style.display = 'block';
+
+                const bgInterval = setInterval(async () => {
+                    const alive = await pingBackend(5000);
+                    if (!alive) return;
+                    clearInterval(bgInterval);
+                    document.getElementById('static-card').style.display = 'none';
+                    const tok = getToken();
+                    if (tok) {
+                        const r = await authFetch('/api/me');
+                        if (r.ok) { window.location.href = 'index.html'; return; }
+                        clearAuth();
+                    }
+                    document.getElementById('register-card').style.display = 'block';
+                }, 30000);
+
                 return;
             }
 
