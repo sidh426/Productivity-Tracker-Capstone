@@ -266,7 +266,7 @@ main {
 }
 
 .task-form input[type="text"] { flex: 1; min-width: 160px; }
-.task-form input[type="date"] { min-width: 140px; }
+.task-form input[type="date"] { min-width: 140px; max-width: 100%; }
 
 .task-form input:focus,
 .task-form select:focus {
@@ -882,7 +882,9 @@ footer {
     .task-form select,
     .task-form .btn {
         width: 100%;
-        min-width: unset;
+        min-width: 0;      /* override flex item min-width:auto default */
+        max-width: 100%;   /* prevent native date chrome from expanding */
+        box-sizing: border-box;
     }
 }
 
@@ -955,7 +957,7 @@ footer {
     .task-form input[type="text"],
     .task-form input[type="date"],
     .task-form select,
-    .task-form .btn { width: 100%; min-width: unset; }
+    .task-form .btn { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
 
     /* ── Task items: let meta wrap under the label ── */
     .task-item { flex-wrap: wrap; }
