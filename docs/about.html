@@ -18,6 +18,7 @@
                 <a href="about.html" class="active">About</a>
             </nav>
             <span class="nav-username" id="nav-username"></span>
+            <a href="login.html" class="btn btn-ghost btn-sm" id="login-link" style="display:none;">Sign in</a>
             <button class="btn btn-ghost btn-sm" id="logout-btn" style="display:none;">Sign out</button>
             <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">🌙</button>
         </div>
@@ -25,60 +26,252 @@
 
     <main>
         <div class="hero">
-            <h1>About</h1>
-            <p>Productivity Tracker Capstone — CMPA4404</p>
+            <h1>About this project</h1>
+            <p>Productivity Tracker Capstone &mdash; CMPA4404</p>
         </div>
 
+        <!-- Origin -->
         <div class="card">
+            <h2 class="about-heading">Where it started</h2>
             <div class="about-section">
-                <div>
-                    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">What is this?</h2>
-                    <p>
-                        Productivity Tracker is a full-stack habit and task management web application built as a
-                        capstone project. It helps students and young adults stay consistent with daily habits,
-                        manage tasks by category, and plan ahead using a built-in calendar — all without the
-                        complexity of traditional productivity apps.
-                    </p>
+                <p>
+                    This app grew out of a project I built in CMPA4403 called
+                    <strong>productivity-tracker-ui</strong> — a fully client-side habit and task tracker
+                    written in plain HTML, CSS, and vanilla JavaScript with no dependencies or frameworks.
+                    Everything lived in the browser using <code>localStorage</code>, which meant data
+                    disappeared the moment you switched devices.
+                </p>
+                <p>
+                    That project taught me how to manage UI state without a framework, keep the DOM in sync
+                    with an underlying data array through category filtering and re-renders, and build a
+                    polished design system from scratch using CSS Custom Properties. It became something I
+                    actually used day-to-day — which made me want to take it further.
+                </p>
+                <p>
+                    The capstone version (CMPA4404) keeps the same design language and zero-dependency
+                    frontend philosophy, but adds a real backend with user accounts, a hosted database,
+                    and cross-device sync so your data follows you everywhere.
+                </p>
+            </div>
+        </div>
+
+        <!-- Comparison -->
+        <div class="card">
+            <h2 class="about-heading">Original vs Capstone</h2>
+            <div class="about-table-wrap">
+                <table class="about-table">
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>Original (CMPA4403)</th>
+                            <th>Capstone (CMPA4404)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Data storage</td><td>localStorage only</td><td>PostgreSQL via Neon</td></tr>
+                        <tr><td>Cross-device sync</td><td>&#10005;</td><td>&#10003; via user account</td></tr>
+                        <tr><td>User accounts</td><td>&#10005;</td><td>&#10003; register &amp; login</td></tr>
+                        <tr><td>Calendar view</td><td>&#10005;</td><td>&#10003; monthly grid + day panel</td></tr>
+                        <tr><td>Habit tracking</td><td>Basic</td><td>Per-habit streaks &amp; toggles</td></tr>
+                        <tr><td>Day streak</td><td>&#10005;</td><td>&#10003; global completion streak</td></tr>
+                        <tr><td>Due dates</td><td>&#10005;</td><td>&#10003; overdue highlighting</td></tr>
+                        <tr><td>Backend API</td><td>&#10005;</td><td>&#10003; REST API on Render</td></tr>
+                        <tr><td>Guest mode</td><td>Always</td><td>&#10003; opt-in localStorage fallback</td></tr>
+                        <tr><td>Hosting</td><td>GitHub Pages</td><td>GitHub Pages + Render + Neon</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Features in depth -->
+        <div class="card">
+            <h2 class="about-heading">Features in depth</h2>
+            <div class="feature-grid">
+
+                <div class="feature-block">
+                    <div class="feature-icon">&#9711;</div>
+                    <h3>Dashboard</h3>
+                    <p>Your home base. Shows today's tasks, four live stats (total tasks, done today,
+                    remaining, day streak), a daily progress bar, and your habit list — all in one view.
+                    Tasks are grouped by due date and color-coded by category. Filter down to School,
+                    Work, Personal, or Health with a single click.</p>
                 </div>
 
-                <div>
-                    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">Key Features</h2>
-                    <p>Tasks are stored in a backend database so they persist across devices and browser sessions.
-                    The calendar view lets you schedule tasks to specific dates and see your workload at a glance.
-                    Daily habits track consecutive-day streaks to keep you motivated. Dark mode and category
-                    color-coding make the experience comfortable and organized.</p>
-                    <div class="tag-list" style="margin-top:1rem;">
-                        <span class="tag">Backend Storage</span>
-                        <span class="tag">Calendar Planning</span>
-                        <span class="tag">Habit Streaks</span>
-                        <span class="tag">Dark Mode</span>
-                        <span class="tag">Category Filtering</span>
-                        <span class="tag">Progress Tracking</span>
+                <div class="feature-block">
+                    <div class="feature-icon">&#128197;</div>
+                    <h3>Calendar</h3>
+                    <p>A full monthly grid where each day shows colored dots representing your task load.
+                    Click any day to open a side panel showing that day's tasks and an add-task form
+                    pre-filled with that date. Navigate months with the arrow buttons. Days with all
+                    tasks complete show green dots; incomplete days show accent-colored dots.</p>
+                </div>
+
+                <div class="feature-block">
+                    <div class="feature-icon">&#128293;</div>
+                    <h3>Habit Tracker</h3>
+                    <p>Add recurring daily habits separate from tasks. Each habit has its own
+                    streak counter that increments for every consecutive day you mark it complete.
+                    Miss a day and the streak resets to zero. Habits are also category-tagged and
+                    color-coded so you can see at a glance which area of your life each one covers.</p>
+                </div>
+
+                <div class="feature-block">
+                    <div class="feature-icon">&#128202;</div>
+                    <h3>Stats &amp; Streaks</h3>
+                    <p>The dashboard tracks four numbers in real time: all tasks ever created, tasks
+                    completed today, tasks remaining, and your current day streak. The day streak counts
+                    consecutive calendar days where you completed at least one task — a simple but
+                    effective motivator to stay consistent.</p>
+                </div>
+
+                <div class="feature-block">
+                    <div class="feature-icon">&#128198;</div>
+                    <h3>Due Dates &amp; Overdue</h3>
+                    <p>Every task can be assigned a due date when you add it, or left undated.
+                    Tasks past their due date that are still incomplete are highlighted in red so
+                    nothing slips through. The calendar view maps all dated tasks so you can see
+                    your workload spread across the month.</p>
+                </div>
+
+                <div class="feature-block">
+                    <div class="feature-icon">&#127775;</div>
+                    <h3>Dark Mode</h3>
+                    <p>A full dark theme built with CSS Custom Properties that swaps every color in
+                    the design system at once. Your preference is saved to localStorage and applied
+                    before the first paint using an inline script — the same anti-flash technique
+                    from the original project — so there is never a white flash on load.</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Accounts & sync -->
+        <div class="card">
+            <h2 class="about-heading">Accounts &amp; cross-device sync</h2>
+            <div class="about-section">
+                <p>
+                    When you create an account your data is stored in a PostgreSQL database hosted on
+                    <strong>Neon</strong> — a serverless cloud database that persists permanently
+                    regardless of server restarts. Logging in from any device or browser gives you
+                    access to the same tasks, habits, and streaks.
+                </p>
+                <div class="how-it-works">
+                    <div class="hiw-step">
+                        <span class="hiw-num">1</span>
+                        <div>
+                            <strong>Register</strong> with a username, email, and password.
+                            Your password is hashed with bcrypt — the raw password is never stored.
+                        </div>
                     </div>
-                </div>
-
-                <div>
-                    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">Tech Stack</h2>
-                    <div class="tag-list">
-                        <span class="tag">HTML / CSS / JavaScript</span>
-                        <span class="tag">Node.js</span>
-                        <span class="tag">Express</span>
-                        <span class="tag">SQLite (better-sqlite3)</span>
-                        <span class="tag">REST API</span>
+                    <div class="hiw-step">
+                        <span class="hiw-num">2</span>
+                        <div>
+                            <strong>Sign in</strong> from any device. The server issues a JWT token
+                            valid for 30 days, stored in your browser's localStorage.
+                        </div>
                     </div>
-                </div>
-
-                <div>
-                    <h2 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem;">Why this approach?</h2>
-                    <p>
-                        Existing tools like Habitica are engaging but complex; Loop Habit Tracker lacks a web
-                        experience; Streaks is Apple-only. This project balances simplicity and engagement in a
-                        web-based format accessible to anyone, while adding a deliberate planning layer through
-                        the calendar and cross-device persistence through the backend.
-                    </p>
+                    <div class="hiw-step">
+                        <span class="hiw-num">3</span>
+                        <div>
+                            <strong>Every API request</strong> sends that token in the Authorization
+                            header. The server verifies it and returns only your data.
+                        </div>
+                    </div>
+                    <div class="hiw-step">
+                        <span class="hiw-num">4</span>
+                        <div>
+                            <strong>Changes sync instantly</strong> — add a task on your phone,
+                            open your laptop and it's there.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Guest mode -->
+        <div class="card">
+            <h2 class="about-heading">Guest mode</h2>
+            <div class="about-section">
+                <p>
+                    Don't want an account? Click <strong>Continue without account</strong> on the
+                    login page. Guest mode stores everything in your browser's <code>localStorage</code>
+                    — tasks and habits are fully functional but tied to that one browser only.
+                </p>
+                <p>
+                    Guest data is <strong>not synced</strong> across devices. Clearing your browser
+                    data or switching browsers will lose it. On Apple devices using Safari with iCloud
+                    Keychain, localStorage is synced between your Mac and iPhone automatically by the
+                    OS — this is browser behaviour outside the app's control.
+                </p>
+                <p>
+                    To switch from guest mode to an account, click <strong>Sign in</strong> in the
+                    nav bar and register. Your existing guest data will remain in that browser's
+                    localStorage, but new data will be saved to the backend.
+                </p>
+            </div>
+        </div>
+
+        <!-- Tech stack -->
+        <div class="card">
+            <h2 class="about-heading">Tech stack</h2>
+            <div class="stack-grid">
+                <div class="stack-group">
+                    <h3>Frontend</h3>
+                    <div class="tag-list">
+                        <span class="tag">HTML5</span>
+                        <span class="tag">CSS3 Custom Properties</span>
+                        <span class="tag">Vanilla JavaScript</span>
+                        <span class="tag">CSS Grid &amp; Flexbox</span>
+                        <span class="tag">Fetch API</span>
+                        <span class="tag">localStorage</span>
+                    </div>
+                </div>
+                <div class="stack-group">
+                    <h3>Backend</h3>
+                    <div class="tag-list">
+                        <span class="tag">Node.js</span>
+                        <span class="tag">Express</span>
+                        <span class="tag">REST API</span>
+                        <span class="tag">JWT Authentication</span>
+                        <span class="tag">bcryptjs</span>
+                        <span class="tag">node-postgres (pg)</span>
+                    </div>
+                </div>
+                <div class="stack-group">
+                    <h3>Infrastructure</h3>
+                    <div class="tag-list">
+                        <span class="tag">GitHub Pages</span>
+                        <span class="tag">Render (API server)</span>
+                        <span class="tag">Neon (PostgreSQL)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Why this approach -->
+        <div class="card">
+            <h2 class="about-heading">Design philosophy</h2>
+            <div class="about-section">
+                <p>
+                    Existing tools like <strong>Habitica</strong> are feature-rich but overwhelming;
+                    <strong>Todoist</strong> is powerful but complex; <strong>Streaks</strong> is
+                    Apple-only. This project aims for the middle ground — a focused, fast, distraction-free
+                    tool that does tasks, habits, and planning well without asking you to learn a new system.
+                </p>
+                <p>
+                    The frontend is intentionally built without frameworks. No React, no Vue, no bundler.
+                    Every interaction is written in plain JavaScript against the DOM. This keeps the
+                    codebase readable, the bundle size at zero, and the load time near-instant —
+                    while still delivering a polished, responsive experience on any device.
+                </p>
+                <p>
+                    The backend follows the same principle: one file (<code>server.js</code>), one
+                    database, one clear responsibility per route. The goal was to build something
+                    genuinely useful while keeping every layer of the stack understandable.
+                </p>
+            </div>
+        </div>
+
     </main>
 
     <footer>
@@ -87,7 +280,6 @@
 
     <script src="auth.js"></script>
     <script>
-        // Dark mode toggle
         const root = document.documentElement;
         const btn  = document.getElementById('theme-toggle');
         function syncIcon() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
@@ -99,16 +291,21 @@
             syncIcon();
         });
 
-        // Show username + logout if logged in
         (async () => {
             const backendUp = await isBackendAvailable();
-            if (!backendUp) return;
+            const loginLink = document.getElementById('login-link');
+            if (!backendUp || isGuestMode()) {
+                if (loginLink) loginLink.style.display = 'inline-flex';
+                return;
+            }
             const user = getUser();
             if (user) {
                 const el = document.getElementById('nav-username');
                 if (el) el.textContent = user.username;
                 const logoutBtn = document.getElementById('logout-btn');
                 if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+            } else {
+                if (loginLink) loginLink.style.display = 'inline-flex';
             }
         })();
     </script>
