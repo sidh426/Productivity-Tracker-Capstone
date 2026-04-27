@@ -159,6 +159,7 @@ main {
     padding: 1.5rem;
     box-shadow: var(--shadow);
     margin-bottom: 1.5rem;
+    overflow: hidden;
 }
 
 .card-header {
@@ -872,18 +873,20 @@ footer {
     }
     .day-panel { position: static; }
 
-    /* Stack task form at tablet width so date input never overflows */
+    /* Stack task form — clip overflow so iOS date input stays inside card */
     .task-form {
         flex-direction: column;
         gap: 0.5rem;
+        overflow: hidden;
     }
     .task-form input[type="text"],
     .task-form input[type="date"],
     .task-form select,
     .task-form .btn {
-        width: 100%;
-        min-width: 0;      /* override flex item min-width:auto default */
-        max-width: 100%;   /* prevent native date chrome from expanding */
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
         box-sizing: border-box;
     }
 }
